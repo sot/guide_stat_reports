@@ -1,0 +1,62 @@
+--- task
+---
+
+starcheck_print: https://icxc.harvard.edu/cgi-bin/aspect/starcheck_print/starcheck_print.cgi
+stats_print: https://icxc.harvard.edu/cgi-bin/aspect/get_stats/get_stats.cgi
+
+# 5 Percent
+bad_telem_threshold: 5 
+limit_bad_list: 100
+
+db:
+   connect_info: sybase-aca-aca_read
+   table: guide_stats_view
+
+data:
+   rates:
+      bad_track: 
+         value: 5
+         field: percent_not_tracking 
+         operator: '>='
+      fail_track:
+         value: 100
+         field: percent_not_tracking
+         operator: '='
+      obc_bad_status:
+         value: 5
+         field: percent_obc_bad_status
+         operator: '>='
+
+   mag_zoom:
+      mag_start: 10.0
+      mag_stop: 10.8
+      mag_bin: .1
+
+
+
+template_file: report_template.txt
+report_file: gs_report.txt
+report_yaml_file: gs_report.yml
+
+mission_start_time:
+   year: 1999
+   month: 1
+   day: 1
+
+
+
+
+histogram:
+   mag_start: 5.5
+   mag_stop: 11.5
+   mag_bin: .1
+   color_start: -.5
+   color_stop: 2.0
+   color_bin: .1
+   plot_name: histogram.gif
+
+
+scatter:
+   plot_name: scatter.gif
+   mag_plot_start: 5
+   mag_plot_stop: 12
