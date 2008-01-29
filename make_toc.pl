@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-
+use IO::All;
 
 my %opt = (  );
 
@@ -143,7 +143,7 @@ $toc .= qq{ </BODY></HTML> };
 
 
 my $outfile = "index.html";
-io("${webprefix}/${outfile}")->print($toc);
+io("${WEBDATA}/${outfile}")->print($toc);
 
 
 

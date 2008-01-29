@@ -164,3 +164,18 @@ plots:
          - xtitle: 'AGASC magnitude (mag)'
          - ytitle: 'Observed - AGASC mag'
          - logy: 0
+
+   delta_color_scatter:
+      x: color
+      y: mag_obs_mean-mag_exp
+      plot_name: delt_color_scatter.gif
+      pgs_plot:
+         - lims:
+            - -.5
+            - 2
+            - ~
+            - ~
+         - toptitle: "Delta Mag vs Color"
+         - xtitle: 'AGASC B-V Color'
+         - ytitle: 'Observed - AGASC mag'
+         - logy: 0

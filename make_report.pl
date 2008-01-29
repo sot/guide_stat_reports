@@ -87,6 +87,7 @@ GetOptions( \%opt,
 	    "predefined=s",
 	    "outdir=s",
 	    "update!",
+	    "no_summary!",
 	    );
 
 
@@ -248,7 +249,9 @@ sub run_predefined{
 
     run_report({ config => \%config, opt => \%opt });    
     use Ska::Run;
-    run("${SHARE}/make_summary.pl -${type}", loud => 1);
+    unless (defined $opt{no_summary}){
+	run("${SHARE}/make_summary.pl -${type}", loud => 1);
+    }
     run("${SHARE}/make_toc.pl", loud => 1);
 
 }
@@ -281,11 +284,13 @@ Runs the summary tool as well to update the summary for the type.
 Uses Ska::Report::TimeRange to find the most recent complete time ranges and checks to see if those
 predefined ranges have been processed.  Updates if needed. 
 
+=item B<-no_summary>
+
+Don't update the appropriate summary file if running in predefined mode
+
 =back
 
 =head1 DESCRIPTION
-
-
 
 
 =cut

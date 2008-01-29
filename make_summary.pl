@@ -36,7 +36,7 @@ my $WEBDATA = "${SKA}/www/ASPECT/${task}";
 my $SKADATA = "${SKA}/data/${task}";
 
 my $datafile = 'gs_report.yml';
-my $webprefix = "http://cxc.harvard.edu/mta/ASPECT/${task}";
+my $webprefix = "http://icxc.harvard.edu/ska/guidestats/";
 
 my @exist_dirs;
 my $title;
@@ -81,7 +81,11 @@ my $starfile = 'bad_stars.gif';
 my $ratefile = 'bad_rate.gif';
 my %plots;
 my $table;
-$table .= qq{ <HTML><HEAD><TITLE>$title Summary</TITLE></HEAD><BODY> };
+
+$table .= qq{ <HTML><HEAD><TITLE>$title Summary</TITLE> };
+$table .= qq^ <link href="/mta/ASPECT/aspect.css" rel="stylesheet" type="text/css" media="all" /> ^;
+$table .= qq^ <style type="text/css"> body { min-width:900px; background:url('http://asc.harvard.edu/mta/ASPECT/blue_paper.gif'); } } </style> ^;
+$table .= qq{ </HEAD><BODY> };
 $table .= qq{ <H3>$title Summary</H3> \n };
 $table .= qq{ <TABLE> };
 $table .= qq{ <TR><TD><IMG SRC="./bad_stars.gif"></TD></TR> };
