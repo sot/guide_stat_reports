@@ -33,8 +33,8 @@ data:
       mag_bin: .1
 
 
-
-template_file: report_template.txt
+index_file: all_plot_report.html
+predefined_index_file: standard_report.html
 report_file: gs_report.txt
 report_yaml_file: gs_report.yml
 
@@ -45,18 +45,122 @@ mission_start_time:
 
 
 
+plots:
+# Report.pm knows how to make histogram and scatter plots
+# the type is determined on a string match on the key of
+# this hash (e.g. mag_histogram is a histogram)
 
-histogram:
-   mag_start: 5.5
-   mag_stop: 11.5
-   mag_bin: .1
-   color_start: -.5
-   color_stop: 2.0
-   color_bin: .1
-   plot_name: histogram.gif
+# scatter and histogram require that a plot_name image gif 
+# be specified.
+
+# scatter and histogram also optionally pass an array directly to
+# pgs_plot (the pgs_plot key).  This gets passed *before* the data
+# is plotted
+
+# histograms need a "bin_over" variable to define the X axis bins
+# they also need a start, stop, and bin (which is bin size)
+   mag_histogram:
+      bin_over: mag_exp
+      start: 5.5
+      stop: 11.5
+      bin: .1
+      plot_name: mag_histogram.gif
+      
+      pgs_plot:
+#   #      toptitle: "Mags for good (black) and bad (red) guide stars"
+         - toptitle: "N good (black) and bad (red) stars vs Mag" 
+         - xtitle: 'Star magnitude (mag)'
+         - ytitle: 'N stars (red is x100)'
+         - lims:
+            - 5
+            - 12
+            - ~
+            - ~
+         - logy: 1
+
+   color_histogram:
+      bin_over: color
+      start: -.5
+      stop: 2.0
+      bin: .1
+      plot_name: color_histogram.gif
+      pgs_plot:
+         - toptitle: "N good (black) and bad (red) stars vs Color"
+         - xtitle: 'Color (B-V)'
+         - ytitle: 'N stars (red is x100)'
+         - lims:
+            - -.5
+            - 2.0
+            - ~
+            - ~
+         - logy: 1
+
+# for the scatter plots, x and y are passed directly into select
+#  statements to retrieve the data
+
+   tracking_scatter:
+      x: mag_exp
+      y: (percent_not_tracking/100)
+      plot_name: tracking_scatter.gif
+      pgs_plot:
+         - logy: 1
+         - lims:
+            - 5
+            - 12
+            - ~
+            - ~
+         - toptitle: "Fraction not tracking vs Mag"
+         - xtitle: 'Star magnitude (mag)'
+         - ytitle: 'Fraction not tracking'
+         - x: 
+            - 5
+            - 12
+         - y: 
+            - .05
+            - .05
+         - color:
+            line: red
+         - plot: line
 
 
-scatter:
-   plot_name: scatter.gif
-   mag_plot_start: 5
-   mag_plot_stop: 12
+
+
+   status_scatter:
+      x: mag_exp
+      y: (percent_not_tracking/100)+(percent_bad_status/100)
+      plot_name: status_scatter.gif  
+      pgs_plot:
+         - lims:
+            - 5
+            - 12
+            - ~
+            - ~
+         - toptitle: "Fraction ( Not Tracking + Bad Status) vs Mag"
+         - xtitle: 'Star magnitude (mag)'
+         - ytitle: 'Fraction nt or image status != 0'
+         - logy: 1
+         - x: 
+            - 5
+            - 12
+         - y: 
+            - .05
+            - .05
+         - color:
+            line: red
+         - plot: line
+
+
+   delta_mag_scatter:
+      x: mag_exp
+      y: mag_obs_mean-mag_exp
+      plot_name: delt_mag_scatter.gif
+      pgs_plot:
+         - lims:
+            - 5
+            - 12
+            - ~
+            - ~
+         - toptitle: "Delta Mag vs Mag"
+         - xtitle: 'AGASC magnitude (mag)'
+         - ytitle: 'Observed - AGASC mag'
+         - logy: 0

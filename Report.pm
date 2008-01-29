@@ -28,13 +28,14 @@ use Ska::Run;
 
 my $task = 'guide_stat_reports';
 my $SKA = $ENV{SKA} || '/proj/sot/ska';
-my $SHARE = "${SKA}/share/guide_stat_db";
+my $SHARE = "${SKA}/share/guide_stat_reports";
 my $WEBDATA = "${SKA}/www/ASPECT/${task}";
 my $SKADATA = "${SKA}/data/${task}";
 my $BASEURL = "http://cxc.harvard.edu/mta/ASPECT/${task}";
     
 
 sub standard_report{
+
     my $arg_in = shift;
     my %config = %{$arg_in->{config}};
     my %opt = %{$arg_in->{opt}};
@@ -51,17 +52,11 @@ sub standard_report{
 	}
     }
     else{
-#    make a histogram
-	$opt{type} = 'histogram';
+
 	make_plots({ config => \%config,
 		     opt => \%opt,
 		 });
 	
-# make scatter plots
-	$opt{type} = 'scatter';
-	make_plots({ config => \%config,
-		     opt => \%opt,
-		 });
 	
     }
 }
@@ -69,6 +64,7 @@ sub standard_report{
 
 
 sub calc_report{
+
 
     my $arg_in = shift;
     my %config = %{$arg_in->{config}};
@@ -155,8 +151,10 @@ sub calc_report{
 	$url = $BASEURL . "/" . $opt{year} . "/" . $opt{id};
     }
 
-    $report{HISTOGRAM} = qq{<IMG SRC="${url}/$config{task}->{histogram}->{plot_name}">};
-    $report{SCATTERPLOT} = qq{<IMG SRC="${url}/$config{task}->{scatter}->{plot_name}">};
+
+    for my $plot (keys %{$config{task}->{plots}}){
+	$report{uc($plot) . "_PLOT"} = qq{<IMG SRC="${url}/$config{task}->{plots}->{$plot}->{plot_name}">};
+    }
 
     $report{TITLE} = qq{};
     if (defined $opt{title}){
@@ -720,6 +718,7 @@ sub date_to_doy_format{
 
 sub make_report{
 
+
     my $arg_in = shift;
     my $config = $arg_in->{config};
     my %report = %{$arg_in->{report_hash}};
@@ -727,8 +726,8 @@ sub make_report{
 
 #    my $template_file = "${SHARE}/" . $report_config->{report_text};
 #    my $template_file = "${SHARE}/" . $config->{task}->{template_file};
-    my $template_file = $config->{task}->{template_file};
-    my $report_text = io($template_file)->slurp;
+#    my $template_file = $config->{task}->{template_file};
+#    my $report_text = io($template_file)->slurp;
 
     my @lists;
     my @tables;
@@ -757,7 +756,7 @@ sub make_report{
 #    print Dumper @lists;
 
 
-    my $destfile = $config->{task}->{report_file};
+#    my $destfile = $config->{task}->{report_file};
     my $yamlfile = $config->{task}->{report_yaml_file};
 
     my $save_prefix = qq{};
@@ -792,6 +791,7 @@ sub make_report{
 
 #    print "destfile is $destfile \n";
     unless ($opt->{dryrun}){
+	print "in writing section \n;";
 
 	if (defined $opt->{save_path}){
 	    mkpath( $opt->{save_path}, 1 );
@@ -799,9 +799,18 @@ sub make_report{
 	if (defined $opt->{data_save_path}){
 	    mkpath( $opt->{data_save_path}, 1);
 	}
-
+	
+	my $index_infile = $config->{task}->{index_file};
+	if ($opt->{predefined}){
+	    $index_infile = $config->{task}->{predefined_index_file};
+	}
+	
+	if (-e "${SHARE}/${index_infile}"){
+	    my $index = io("${SHARE}/${index_infile}")->slurp;
+	    io("${save_prefix}/index.html")->print($index);
+	}
 #	print "${save_prefix}${destfile} \n";
-	io("${save_prefix}${destfile}")->print($report_text);
+#	io("${save_prefix}${destfile}")->print($report_text);
 
 	for my $list (@lists){
 	    my $file = lc($list);
@@ -830,7 +839,7 @@ sub make_report{
 
     }
     else{
-	print "$report_text \n";
+	print "ran dryrun \n";
     }
     
 
@@ -1092,23 +1101,23 @@ sub get_counts{
 
 sub make_plots{
 
-=pod
-
-  * make_plots({ config => \%config, opt => \%opt }).
-
-Creates either a histogram or a scatter plot of guide success.
-Intended to be called by the separate make_plots.pl script.
-The type of plot is defined in $opt{type} and must be one of 'histogram' or 'scatter'/
-The time range is defined in $opt{tstart} to $opt{tstop}.
-The save location is defined in $opt{save_path}
-
-The database handle type, the database table for the queries, and the bad telemetry 
-threshold must be present in the config hash at $config{task}->{db}->{connect_info},
-$config{task}->{db}->{table} and $config{task}->{bad_telem_threshold}.
-
-
-=cut
-
+#=pod
+#
+#  * make_plots({ config => \%config, opt => \%opt }).
+#
+#Creates either a histogram or a scatter plot of guide success.
+#Intended to be called by the separate make_plots.pl script.
+#The type of plot is defined in $opt{type} and must be one of 'histogram' or 'scatter'/
+#The time range is defined in $opt{tstart} to $opt{tstop}.
+#The save location is defined in $opt{save_path}
+#
+#The database handle type, the database table for the queries, and the bad telemetry 
+#threshold must be present in the config hash at $config{task}->{db}->{connect_info},
+#$config{task}->{db}->{table} and $config{task}->{bad_telem_threshold}.
+#
+#
+#=cut
+#
     
     my $arg_in = shift;
     my %config = %{$arg_in->{config}};
@@ -1116,14 +1125,14 @@ $config{task}->{db}->{table} and $config{task}->{bad_telem_threshold}.
 
     my %interval = %{define_interval({ tstart => $opt{tstart},
 				       tstop => $opt{tstop}}) };
-
+    
     my $BAD_PERCENT = $config{task}->{bad_telem_threshold};
     
     $ENV{PGPLOT_BACKGROUND} = 'white';
     $ENV{PGPLOT_FOREGROUND} = 'black';
     
     my $handle = sql_connect( $config{task}->{db}->{connect_info} );
-
+    
 
     my $save_prefix = qq{};
 #    if (defined $opt{save_string}){
@@ -1141,304 +1150,222 @@ $config{task}->{db}->{table} and $config{task}->{bad_telem_threshold}.
     
 #    print "save prefix is $save_prefix \n";
     
-    if ( $opt{type} eq 'histogram' ){
+    my @plots = keys %{$config{task}->{plots}};
 
-=pod
+    for my $plot (@plots){
+#	print "$plot \n";
+	my %plotcfg = %{$config{task}->{plots}->{$plot}};
+#	use Data::Dumper;
+#	print Dumper %plotcfg;
+	my @plot_array;
+	my $plot_islog = 0;
 
-For a histogram, the range and bin size must be specified in the config hash as
-$config{task}->{histogram}->{mag_start}, $config{task}->{histogram}->{mag_stop}, and
-$config{task}->{histogram}->{mag_bin}.
+	# make the silly array/hash that pgs_plot
+	if ( defined $plotcfg{pgs_plot}){
+	    for my $pgs_elem (@{$plotcfg{pgs_plot}}){
+		for my $key (keys %{$pgs_elem}){ 
+		    push @plot_array, $key => $pgs_elem->{$key};
+		    if ($key eq 'logy'){
+			$plot_islog = $pgs_elem->{$key};
+		    }
+		}
+						 
+	    }
 
-=cut
-	
-	my $mag_start = $config{task}->{histogram}->{mag_start};
-	my $mag_stop =  $config{task}->{histogram}->{mag_stop};
-	my $bin =  $config{task}->{histogram}->{mag_bin};
-	
-	
-	my @bad_track_x100;
-	my @good_track;
-	my @mag_bin;
-	
-	for ( my $mag = $mag_start; $mag < $mag_stop; $mag += $bin ){
+	}
+
+#	print "curr plot array\n";
+#	use Data::Dumper;
+#	print Dumper @plot_array;
+
+	if ($plot =~ /histogram/){
+#	    print "$plot is histogram \n";
+#=pod
+#
+#For a histogram, the range and bin size must be specified in the config hash as
+#$config{task}->{histogram}->{mag_start}, $config{task}->{histogram}->{mag_stop}, and
+#$config{task}->{histogram}->{mag_bin}.
+#
+#=cut
+
+	    my $bin_type = $plotcfg{bin_over};
 	    
-	    push @mag_bin, $mag;
+	    my $start = $plotcfg{start};
+	    my $stop =  $plotcfg{stop};
+	    my $bin_size =  $plotcfg{bin};
 	    
-	    my $bad_track_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-							   fields => [ "count(*) as not_tracked" ],
-							   where => { mag_exp => { '>=' => $mag, '<' => $mag + $bin },
-								      'percent_not_tracking' => { '>=' => $BAD_PERCENT },
+	    
+	    my @bad_x100;
+	    my @good;
+	    my @data_bin;
+	    
+	    for ( my $bin = $start; $bin < $stop; $bin += $bin_size ){
+		
+		push @data_bin, $bin;
+		
+		my $bad_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
+						     fields => [ "count(*) as not_tracked" ],
+							 where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+								    'percent_not_tracking' => { '>=' => $BAD_PERCENT },
 #								      percent_not_tracking => { '>=' => $BAD_PERCENT },
-								      type => { '!=' => 'FID'},
-								      kalman_tstart => { '>=' => $interval{tstart} },
-								      kalman_tstop => { '<=' => $interval{tstop} },
-								  },					       
-						       });
+								    type => { '!=' => 'FID'},
+								    kalman_tstart => { '>=' => $interval{tstart} },
+								    kalman_tstop => { '<=' => $interval{tstop} },
+								},					       
+						     });
 
 #	print $bad_track_select->get_select_string();
-	    
-	    my $answer_ref = $bad_track_select->run({ handle => $handle, type => 'array' });
-	    push @bad_track_x100, $answer_ref->[0]->{not_tracked}*100;
+		
+		my $answer_ref = $bad_select->run({ handle => $handle, type => 'array' });
+		push @bad_x100, $answer_ref->[0]->{not_tracked}*100;
 #	    print "at $mag, bad=", $answer_ref->[0]->{not_tracked}*100, "\n";
+		
 	    
-	    
-	    my $good_track_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-							    fields => [ "count(*) as tracked" ],
-							    where => { mag_exp => { '>=' => $mag, '<' => $mag + $bin },
-								       'percent_not_tracking'  => { '<' => $BAD_PERCENT },
-								       type => { '!=' => 'FID' },
-								       kalman_tstart => { '>=' => $interval{tstart} },
-								       kalman_tstop => { '<=' => $interval{tstop} },
-								       
-								   },						
-							});
-
+		my $good_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
+							  fields => [ "count(*) as tracked" ],
+							  where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+								     'percent_not_tracking'  => { '<' => $BAD_PERCENT },
+								     type => { '!=' => 'FID' },
+								     kalman_tstart => { '>=' => $interval{tstart} },
+								     kalman_tstop => { '<=' => $interval{tstop} },
+								     
+								 },						
+						      });
+		
 #	    print $good_track_select->get_select_string();
 
-	    my $good_track_ref = $good_track_select->run({ handle => $handle, type => 'array' });
-	    
-	    push @good_track, $good_track_ref->[0]->{tracked};
-	    
-	}
-
-=pod
-
-For this histogram of success by color, the color range and bin size must be present in the config hash
-as $config{task}->{histogram}->{color_start}, $config{task}->{histogram}->{color_stop} and 
-$config{task}->{histogram}->{color_bin} .
-
-=cut	
-	
-	my $color_start = $config{task}->{histogram}->{color_start};
-	my $color_stop = $config{task}->{histogram}->{color_stop};
-	my $cbin = $config{task}->{histogram}->{color_bin};
-	
-	my @bad_color_x100;
-	my @good_color;
-	my @color_bin;
-	
-	for ( my $color = $color_start; $color < $color_stop; $color += $cbin ){
-	    
-	    push @color_bin, $color;
-	    
-	    my $bad_track_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-							   fields => [ "count(*) as not_tracked" ],
-							   where => { color => { '>=' => $color, '<' => $color + $cbin },
-								      'percent_not_tracking' => { '>=' => $BAD_PERCENT },
-								      type => { '!=' => 'FID'},
-								      kalman_tstart => { '>=' => $interval{tstart} },
-								      kalman_tstop => { '<=' => $interval{tstop} },
-								  },					       
-						       });
-
-#    print $select->get_select_string();
-
-	    my $answer_ref = $bad_track_select->run({ handle => $handle, type => 'array' });
-	    push @bad_color_x100, $answer_ref->[0]->{not_tracked}*100;
-
-	    my $good_track_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-							    fields => [ "count(*) as tracked" ],
-							    where => { color => { '>=' => $color, '<' => $color + $cbin },
-								       'percent_not_tracking' => { '<' => $BAD_PERCENT },
-								       type => { '!=' => 'FID' },
-								       kalman_tstart => { '>=' => $interval{tstart} },
-								       kalman_tstop => { '<=' => $interval{tstop} },
-								   },						
-							});
-	
-	    my $good_track_ref = $good_track_select->run({ handle => $handle, type => 'array' });
-#    print Dumper $good_track_ref;
-	    push @good_color, $good_track_ref->[0]->{tracked};
-#	print " at $color, good=", $good_track_ref->[0]->{tracked}, ", bad=", $answer_ref->[0]->{not_tracked}, "\n";
-	    
-	}
-
-	my @label = ( 
-		      );
-
-#	print scalar(@mag_bin), ":", scalar(@good_track), ":", scalar(@bad_track_x100), ":", scalar(@bad_color_x100), ":", scalar(@good_color), "\n";
-    
-	my @plot = ( 
-		     'x' => pdl(@mag_bin),
-		     'y' => pdl(@good_track)+.01,
-		     panel => [1,1],
-		     logy => 1,
-		     lims => [$mag_start,$mag_stop, 0.2, undef],
-		     options => {center => 1},
-		     charsize => {symbol => 0.7,
-				  title => 2.0,
-				  axis => 2.0,
-			      },
-		     toptitle => "Mags for good (black) and bad (red) guide stars",
-		     xtitle => 'Star magnitude (mag)',
-		     ytitle => 'Number (red is x100)',
-		     @label,
-		     plot => 'bin',
-		     'x' => pdl(@mag_bin)+0.1,
-		     'y' => pdl(@bad_track_x100)+.01,
-		     color => { line => 'red' },
-		     plot => 'bin',
-		     );
-	
-	my @plot2 = ( 'x' => pdl(@color_bin),
-		      'y' => pdl(@good_color)+.01,
-		      panel => [1,2],
-		      logy => 1,
-		      lims => [$color_start,$color_stop, 0.2, undef],
-		      options => {center => 1},
-		      charsize => {symbol => 0.7,
-				   title => 2.0,
-				   axis => 2.0,
-			       },
-		      toptitle => "",
-		      xtitle => 'Color',
-		      ytitle => 'Number (red is x100)',
-		      @label,
-		      plot => 'bin',
-		      'x' => pdl(@color_bin)+.1,
-		      'y' => pdl(@bad_color_x100)+0.01,
-		      color => { line => 'red' },
-		      plot => 'bin',
-		      );
-
-=pod
-
-The plot name should be present in the config file as $config{task}->{histogram}->{plot_name} and
-should have a .gif extension or no extension.
-
-=cut
-
-	$config{task}->{histogram}->{plot_name} =~ s/.gif$/.ps/;
-	my $file = $config{task}->{histogram}->{plot_name} . "/vcps";
-
-	
-	unless ($opt{dryrun}){
-	    if (defined $opt{save_path}){
-		mkpath( $opt{save_path}, 1 );
+		my $good_ref = $good_select->run({ handle => $handle, type => 'array' });
+		
+		push @good, $good_ref->[0]->{tracked};
 	    }
-	    $file = $save_prefix . $file;
-	    pgs_plot( 
-		      ny => 2,
-		      xsize => 7,
-		      ysize => 7,
-		      device => $file,
-		      @plot,
-		      @plot2,
-		      );
-	    $file =~ s/\/vcps$//;
-	    my $psfile = $file;
-	    $file =~ s/\.ps/.gif/;
-	    run("convert -antialias $psfile $file");
-	    
-	    
+
+#	    print Dumper @data_bin;
+#	    print Dumper @good;
+#	    print Dumper @bad_x100;
+
+	    # find min non-zero value
+	    my $good_pdl = pdl(@good);
+	    my $min_non_zero = $good_pdl->( which( $good_pdl > 0) )->min();
+	    my $y_good = $plot_islog ? $good_pdl + ($min_non_zero/10.) : $good_pdl;
+	    my $bad_pdl = pdl(@bad_x100);
+	    my $y_bad = $plot_islog ? $bad_pdl + ($min_non_zero/10.) : $bad_pdl;
+
+	    push @plot_array,   
+	    'x' => pdl(@data_bin),
+	    'y' => $y_good,
+	    options => {center => 1},
+	    charsize => {symbol => 0.7,
+			 title => 2.0,
+			 axis => 2.0,
+		     },
+	    plot => 'bin',
+	    'x' => pdl(@data_bin)+0.01,
+	    'y' => $y_bad,
+	    options => {center => 1},
+	    charsize => {symbol => 0.7,
+			 title => 2.0,
+			 axis => 2.0,
+		     },
+	    color => { line => 'red' },
+	    plot => 'bin',
+	    ;
+
+		
+
+
 	}
-    }	
-
-
-
-if ($opt{type} eq 'scatter'){
     
-    my $all_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-					     fields => [ "id", "mag_exp", "percent_not_tracking", "percent_bad_status" ],
-					     where =>  { type => { '!=' => 'FID'},
-							 kalman_tstart => { '>=' => $interval{tstart} },
-							 kalman_tstop => { '<=' => $interval{tstop} },
-						     },
-					 });
-
-    my $query = $all_select->get_select_string();
-
+	    
+	  #	print scalar(@mag_bin), ":", scalar(@good_track), ":", scalar(@bad_track_x100), ":", scalar(@bad_color_x100), ":", scalar(@good_color), "\n";
+	    
+	    # if anything is defined in the config file, use it
+	    
+	    
+	    if ($plot =~ /scatter/){
+#		print "$plot is scatter \n";
+		my $all_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
+							 fields => [ "$plotcfg{x} as x", "$plotcfg{y} as y"],
+							 where =>  { type => { '!=' => 'FID'},
+								     kalman_tstart => { '>=' => $interval{tstart} },
+								     kalman_tstop => { '<=' => $interval{tstop} },
+								 },
+						     });
+		
+		my $query = $all_select->get_select_string();
+		
 #    print "query is $query \n";
-    
-    my $sqlh= $handle->prepare($query);
-    $sqlh->execute();
-    my @x_mag;
-    my @y_nt;
-    my @y_ntbs;
-    while( my $star = $sqlh->fetchrow_hashref()){
-#	print Dumper $star;
-	push @x_mag, $star->{mag_exp};
-	push @y_nt, $star->{percent_not_tracking}/100.;
-	push @y_ntbs, ($star->{percent_not_tracking}/100)+($star->{percent_bad_status}/100); 
-    }
+		
+		my $sqlh= $handle->prepare($query);
+		$sqlh->execute();
+		my @x;
+		my @y;
+		while( my $star = $sqlh->fetchrow_hashref()){
 
+		    push @x, $star->{x};
+		    push @y, $star->{y};
+		}
+		
+#		$handle->disconnect();
+		
+		my @label = ( 
+			      );
+		
+#		 'x' => [[ $mag_plot_start, $mag_plot_stop ]],
+#		 'y' => [[ ($BAD_PERCENT)/100., ($BAD_PERCENT)/100. ]],
+#		 color => { line => 'red' },
+#		 plot => 'line',
 
-    $handle->disconnect();
+		# find min non-zero value
+		my $good_pdl = pdl(@y);
+		my $min_non_zero = $good_pdl->( which( $good_pdl > 0) )->min();
+		my $y = $plot_islog ? $good_pdl + ($min_non_zero/10.) : $good_pdl;
+		
+		push @plot_array, 
+		'x' => pdl(@x),
+		'y' => $y,
+		options => {center => 1},
+		charsize => {symbol => 0.7,
+			     title => 2.0,
+			     axis => 2.0,
+			 },
+		@label,
+		plot => 'points',
+		;
+		
+	    }
+	    
 
-    my @label = ( 
-		);
+	    
+	    my $plot_name = $plotcfg{plot_name};
+	    $plot_name =~ s/.gif$/.ps/;
+	    my $file = $plot_name . "/vcps";
 
-    my $mag_plot_start = $config{task}->{scatter}->{mag_plot_start};
-    my $mag_plot_stop = $config{task}->{scatter}->{mag_plot_stop};
-
-
-    my @plot = ( panel => [1,1],
-		 'x' => pdl(@x_mag),
-		 'y' => pdl(@y_nt)+.00001,
-		 logy => 1,
-		 lims => [$mag_plot_start, $mag_plot_stop, 0.0001, undef],
-		 options => {center => 1},
-		 charsize => {symbol => 0.7,
-			      title => 2.0,
-			      axis => 2.0,
-			  },
-		 toptitle => "Fraction not tracking",
-		 xtitle => 'Star magnitude (mag)',
-		 ytitle => 'Fraction',
-		 @label,
-		 plot => 'points',
-		 'x' => [[ $mag_plot_start, $mag_plot_stop ]],
-		 'y' => [[ ($BAD_PERCENT)/100., ($BAD_PERCENT)/100. ]],
-		 color => { line => 'red' },
-		 plot => 'line',
-		 panel => [1,2],
-		 'x' => pdl(@x_mag),
-		 'y' => pdl(@y_ntbs)+.00001,
-		 logy => 1,
-		 lims => [$mag_plot_start, $mag_plot_stop, 0.0001, undef],
-		 options => {center => 1},
-		 charsize => {symbol => 0.7,
-			      title => 2.0,
-			      axis => 2.0,
-			  },
-		 toptitle => "Fraction not tracking or image status != 0",
-		 xtitle => 'Star magnitude (mag)',
-		 ytitle => 'Fraction',
-		 @label,
-		 plot => 'points',
-		 'x' => [[ $mag_plot_start, $mag_plot_stop ]],
-		 'y' => [[ ($BAD_PERCENT)/100., ($BAD_PERCENT)/100. ]],
-		 color => { line => 'red' },
-		 plot => 'line',
-	     );
-
-    $config{task}->{histogram}->{plot_name} =~ s/.gif$/.ps/;
-    my $file = $config{task}->{scatter}->{plot_name} . "/vcps";
-
-
-    unless ($opt{dryrun}){
-	if (defined $opt{save_path}){
-	    mkpath( $opt{save_path}, 1 );
-	}
-	$file = $save_prefix . $file;
+#	    use Data::Dumper;
+#	    print Dumper @plot_array;
+	    
+	    unless ($opt{dryrun}){
+		if (defined $opt{save_path}){
+		    mkpath( $opt{save_path}, 1 );
+		}
+		$file = $save_prefix . $file;
+		pgs_plot( 
+			  ny => 1,
+			  xsize => 7,
+			  ysize => 3.5,
+			  device => $file,
+			  @plot_array,
+			  );
+		$file =~ s/\/vcps$//;
+		my $psfile = $file;
+		$file =~ s/\.ps/.gif/;
+		run("convert -antialias $psfile $file");
+		unlink "$psfile";
+		
+	    }
+	}	
 	
-	pgs_plot( 
-		  ny => 2,
-		  xsize => 7,
-		  ysize => 7,
-		  device => $file,
-		  @plot,
-		  
-		  );
-	$file =~ s/\/vcps$//;
-	my $psfile = $file;
-	$file =~ s/\.ps/.gif/;
-	run("convert -antialias $psfile $file");
-	
+}
 
-    }
-}
-}
 
 
 1;

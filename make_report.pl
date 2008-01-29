@@ -13,8 +13,10 @@ use Chandra::Time;
 use Date::Tie;
 
 use Ska::Report::TimeRange;
+use Pod::Help qw( -help);
 
-require "Report.pm";
+use Ska::GuideStats::Report;
+#require "Report.pm";
 
 =pod
 
@@ -24,7 +26,7 @@ make_report.pl - script to extract guide star statistics for a specified interva
 
 =head1 SYNOPSIS
 
-B<make_report.pl> [I<options]
+B<make_report.pl> [I<options>]
  
 =cut
 
@@ -281,6 +283,8 @@ predefined ranges have been processed.  Updates if needed.
 =back
 
 =head1 DESCRIPTION
+
+
 
 
 =cut
