@@ -249,6 +249,7 @@ sub run_predefined{
     run_report({ config => \%config, opt => \%opt });    
     use Ska::Run;
     run("${SHARE}/make_summary.pl -${type}", loud => 1);
+    run("${SHARE}/make_toc.pl", loud => 1);
 
 }
 

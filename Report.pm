@@ -791,7 +791,7 @@ sub make_report{
 
 #    print "destfile is $destfile \n";
     unless ($opt->{dryrun}){
-	print "in writing section \n;";
+#	print "in writing section \n;";
 
 	if (defined $opt->{save_path}){
 	    mkpath( $opt->{save_path}, 1 );
