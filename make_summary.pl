@@ -36,7 +36,8 @@ my $WEBDATA = "${SKA}/www/ASPECT/${task}";
 my $SKADATA = "${SKA}/data/${task}";
 
 my $datafile = 'gs_report.yml';
-my $webprefix = "http://icxc.harvard.edu/ska/guidestats/";
+#my $webprefix = "http://icxc.harvard.edu/ska/guidestats/";
+my $webprefix = "http://cxc.harvard.edu/mta/ASPECT/guide_stat_reports/";
 
 my @exist_dirs;
 my $title;

@@ -15,8 +15,9 @@ use Date::Tie;
 use Ska::Report::TimeRange;
 use Pod::Help qw( -help);
 
-use Ska::GuideStats::Report;
+#use Ska::GuideStats::Report;
 #require "Report.pm";
+use Ska::StarStats::Report;
 
 =pod
 
@@ -148,9 +149,11 @@ sub run_report{
     eval{
 	$config{task}->{template_file} = 'index.php';
 	$config{task}->{report_file} = 'index.php';
-	Ska::GuideStats::Report::standard_report({ config => \%config,
-						   opt => \%opt,
-					       });
+	Ska::StarStats::Report::standard_report({ 
+	    tast => 'guide_stat_reports',
+	    config => \%config,
+	    opt => \%opt,
+	});
 	
     };
     if ($@){
