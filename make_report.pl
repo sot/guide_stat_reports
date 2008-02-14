@@ -16,8 +16,8 @@ use Ska::Report::TimeRange;
 use Pod::Help qw( -help);
 
 #use Ska::GuideStats::Report;
-#require "Report.pm";
-use Ska::StarStats::Report;
+require "Report.pm";
+#use Ska::StarStats::Report;
 
 =pod
 
@@ -146,19 +146,19 @@ sub run_report{
     my %opt = %{$arg_in->{opt}};
 
 
-    eval{
-	$config{task}->{template_file} = 'index.php';
-	$config{task}->{report_file} = 'index.php';
-	Ska::StarStats::Report::standard_report({ 
-	    tast => 'guide_stat_reports',
-	    config => \%config,
-	    opt => \%opt,
-	});
+#    eval{
+    $config{task}->{template_file} = 'index.php';
+    $config{task}->{report_file} = 'index.php';
+    Ska::StarStats::Report->new({ 
+	task => 'guide_stat_reports',
+	config => \%config,
+	opt => \%opt,
+    })->standard_report();
 	
-    };
-    if ($@){
-	print "$@\n";
-    }
+#    };
+#    if ($@){
+#	print "$@\n";
+#    }
 
 }
 
@@ -250,6 +250,8 @@ sub run_predefined{
     $opt{tstop} =  Ska::Report::TimeRange::datetie_to_fits_format( $month_end );
     $opt{calc_rate_tstop} = $opt{tstop};
 
+#    use Data::Dumper;
+#    print Dumper %opt;
     run_report({ config => \%config, opt => \%opt });    
     use Ska::Run;
     unless (defined $opt{no_summary}){

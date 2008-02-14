@@ -1,9 +1,44 @@
-package  Ska::GuideStats::Report;
+package  Ska::StarStats::Report;
+
+=pod
+
+=head1 NAME
+
+Ska::StarStats::Report - Make tables and plots for star statistics (acquisition and guide )
+
+=head1 SYNOPSIS
+
+ For acq stats:
+
+ Ska::StarStats::Report->new({ task => 'acq_stat_reports',
+                               config => \%config,
+                               opt => \%opt,
+                              })->standard_report();
+
+ See files make_report.pl and report.yaml from the guide_stat_reports or acq_stat_reports
+ projects for a quick look at the %config and %opt setup.
+
+=head1 DESCRIPTION
+
+Ska::StarStats::Report contains methods to create yaml summaries, html reports, and gif plots
+of the data in the acquisition or guide star tables.  Selection of the relationships to summarize,
+report, and plot is passed in options and configuration hashes.
+
+=head1 EXPORT
+
+None
+
+=head1 METHODS
+
+=cut
+
+
+
 
 use strict;
 use warnings;
 
-use Data::Dumper;
+
 use Getopt::Long;
 
 use Chandra::Time;
@@ -26,53 +61,151 @@ use PGPLOT::Simple qw( pgs_plot );
 
 use Ska::Run;
 
-my $task = 'guide_stat_reports';
-my $SKA = $ENV{SKA} || '/proj/sot/ska';
-my $SHARE = "${SKA}/share/guide_stat_reports";
-my $WEBDATA = "${SKA}/www/ASPECT/${task}";
-my $SKADATA = "${SKA}/data/${task}";
-my $BASEURL = "http://cxc.harvard.edu/mta/ASPECT/${task}";
+
+use Class::MakeMethods::Standard::Hash( scalar => [ qw(
+						       task
+						       config
+						       opt
+						       dir
+						       output_html
+						       report_yaml
+						       interval
+						       counts
+                                                       )                                                    ]
+
+			
+                                        );
+
+
+
+ 
+sub new{
+
+=pod
+
+ * new(\%args) 
+
+Creates a reporting object.
+
+%args must have a "task" element of (at this time) 'acq_stat_reports' or 'guide_stat_reports' .
+
+%args must also have a "config" element and an "opt" element, though they may be empty 
+(course it isn't going to do much if they are).
+
+=cut
+
+
+    my $class = shift;
+    my $self = {};
+    bless $self, $class;
+
+    my $arg_in = shift;
+    for my $key (keys %{$arg_in}){
+	$self->$key($arg_in->{$key});
+    }
+    unless (defined $self->task()){
+	croak("Task type must be specified \n");
+    }
+
+    my $task = $self->task();
+    my %dir;
+
+# these paths should probably be in a separate config file, but it isn't likely that 
+# we'll need a web test area for this type of project, so it can all end up in 
+# /proj/sot/ska/www/ASPECT/${task} and be referenced from the web as such.
+
+    my $SKA  = $ENV{SKA} || '/proj/sot/ska';
+    $dir{SKA} = $SKA;
+    $dir{SHARE} = "${SKA}/share/${task}";
+    $dir{WEBDATA} = "${SKA}/www/ASPECT/${task}";
+    $dir{SKADATA} = "${SKA}/data/${task}";
+    $dir{BASEURL} = "http://cxc.harvard.edu/mta/ASPECT/${task}";
+
+# If the report is not working in predefined mode, it is going to stick the output in 
+# to the specified or current directory; the paths are set here
+
+    if (defined $self->opt->{predefined}){
+	$dir{URL} = $dir{BASEURL} . "/" . $self->opt->{year} . "/" . $self->opt->{id};
+    }
+    else{
+	$dir{URL} = ".";
+    }
+
+
+    my %opt = %{$self->opt};
+    my $save_prefix = qq{};
+    my $data_save_prefix;
+
+    if (defined $opt{save_path}){
+	if (defined $opt{predefined}){
+	    # watch the order here... don't extend save_path before data_save_path
+	    $dir{DATA_SAVE_PATH} = $dir{SKADATA} . "/" . $opt{save_path};
+	    $dir{SAVE_PATH} = $dir{WEBDATA} . "/" . $opt{save_path};
+	    
+	}
+	else{
+	    $dir{SAVE_PATH} = $opt{save_path} . "/";
+	}
+    }
+    else{
+	$dir{SAVE_PATH} = ".";
+    }
     
+    if (not defined $dir{DATA_SAVE_PATH}){
+	$dir{DATA_SAVE_PATH} = $dir{SAVE_PATH};
+    }
+
+
+# use Data::Dumper;
+# print Dumper %dir;
+
+
+    $self->dir(\%dir);
+
+    return $self;
+}
+   
 
 sub standard_report{
 
-    my $arg_in = shift;
-    my %config = %{$arg_in->{config}};
-    my %opt = %{$arg_in->{opt}};
+=pod
+
+
+ * standard_report()
+
+Calls the methods to make plots and reports
+
+
+=cut
+
+    my $self = shift;
 
     eval{
-	calc_report({ config => \%config,
-		      opt => \%opt,
-		  });
-
+	$self->text_data();
     };
     if($@){
 	if ("$@" =~ /No stars/){
 	    print "No Stars during this interval \n";
 	}
+	else{
+	    print "$@ \n";
+	}
     }
     else{
-
-	make_plots({ config => \%config,
-		     opt => \%opt,
-		 });
-	
+       $self->make_plots();
 	
     }
+    return $self;
 }
-    
 
 
-sub calc_report{
+sub text_data{
+    my $self = shift;
 
+    my %opt = %{$self->opt()};
 
-    my $arg_in = shift;
-    my %config = %{$arg_in->{config}};
-    my %opt = %{$arg_in->{opt}};
-
-# create a hash to store the bits that end up in the report
-    my %report;
-
+    # Define the two key intervals... one for everything thus far and one for the
+    # duration of interest for the report
 
     my %mission_interval = %{define_interval({ tstart => $opt{calc_rate_tstart},
 					       tstop => $opt{calc_rate_tstop}}) };
@@ -81,298 +214,194 @@ sub calc_report{
 					      tstop => $opt{tstop} })};
 
 
-    my %counts = %{get_counts({ mission_interval => \%mission_interval,
-				report_interval => \%report_interval,
-				config => \%config,
-				mag_zoom => $config{task}->{data}->{mag_zoom},
-			    })};
-	    
+    my %interval = ( mission => \%mission_interval,
+		     report => \%report_interval );
+
+    $self->interval(\%interval);
+
+
+    my %counts = %{$self->get_counts()};
+    
     #if there aren't any stars, let's stop fooling around
     if ($counts{report}->{all_stars} == 0){
 	croak("No stars during this interval");
     }
 
+    # the 'expected' rates and such don't follow the same format as the
+    # counts for an interval, so we'll store them on their own and
+    # then shove them into %counts with that name
 
-    my %expected = %{calc_expected({ mission => $counts{mission},
-				     actual => $counts{report},
-				     config => \%config })};
+    my %expected = %{$self->calc_expected(\%counts)};
+
     $expected{name} = 'expected';
 
     $counts{expected} = \%expected;
 
-    my %prob = %{calc_prob({ expected => \%expected,
-			     actual => $counts{report},
-			     config => \%config })};
-    
+    my %prob = %{$self->calc_prob(\%counts)};
+
+    # Add the probabilities to the counts hash
     for my $key (keys %prob){
 	$counts{report}->{$key} = $prob{$key};
     }
 
-    make_top_table({ 
-	
-	report => \%report,
-	expected => $counts{expected},
-	actual => $counts{report},
-	config => \%config,
-	opt => \%opt});
+    $self->counts(\%counts);
+
+    # Make a main table of all of the counts by rate that we've retrieved
+    $self->make_table('main');
+
+    # If there are any areas (like the tail end of the magnitude range for guide stats)
+    # that deserve further examination, that is in the {loop} config hash.
+    # make any tables there.
+    my @loops = @{$self->config->{task}->{data}->{loops}};
+    for my $loop (@loops){
+	$self->make_table('loop', $loop->{name});
+    }
     
-#    print $toptable;
-
-    make_mag_table({ 
-	report => \%report,
-	data => \%counts,
-	config => \%config,
-	opt => \%opt});
-
-
-#    print $mag_table;
-
-#    use Data::Dumper;
-
-#    print Dumper %counts;
-
-#
+    # What are the real report times?
     my $ctime_start = Chandra::Time->new( $report_interval{tstart} );
     my $ctime_stop = Chandra::Time->new( $report_interval{tstop} );
-    $report{DATE_START} = $ctime_start->date();
-    $report{DATE_STOP} = $ctime_stop->date();
+
+    my %report;
+
+    $report{date_start} = $ctime_start->date();
+    $report{date_stop} = $ctime_stop->date();
     
     
-    $report{HUMAN_DATE_START} = time2str("%d-%b-%Y", $ctime_start->unix(), '+0000');
-    $report{HUMAN_DATE_STOP} =  time2str("%d-%b-%Y", $ctime_stop->unix(), '+0000' );
+    $report{human_date_start} = time2str("%d-%b-%Y", $ctime_start->unix(), '+0000');
+    $report{human_date_stop} =  time2str("%d-%b-%Y", $ctime_stop->unix(), '+0000' );
 
-    $report{DATA} = \%counts;
-
-#
-#    }
-
-    my $url = '.';
-    if (defined $opt{predefined}){
-	$url = $BASEURL . "/" . $opt{year} . "/" . $opt{id};
+    # If this is a predefined report, like one for a month, it has a title passed
+    # as an option
+    $report{title} = qq{};
+    if (defined $self->opt->{title}){
+	$report{title} = $self->opt->{title};
     }
 
+    # copy report elements to output_html hash and store for yaml
+    my %report_yaml = %report;
+    my %output_html = %{$self->output_html()};
+    for my $key (keys %report){
+	$output_html{$key} = $report{$key};
+    }
+    for my $key (keys %counts){
+	$report_yaml{$key} = $counts{$key};
+    }
+    $self->report_yaml(\%report_yaml);
+    $self->output_html(\%output_html);
 
-    for my $plot (keys %{$config{task}->{plots}}){
-	$report{uc($plot) . "_PLOT"} = qq{<IMG SRC="${url}/$config{task}->{plots}->{$plot}->{plot_name}">};
+    for my $plot (keys %{$self->config->{task}->{plots}}){
+	my $url_dir = $self->dir->{URL};
+	my $img_file = $self->config->{task}->{plots}->{$plot}->{plot_name};
+	$output_html{"$plot" . "_plot"} = qq{<IMG SRC="${url_dir}/${img_file}">};
     }
 
-    $report{TITLE} = qq{};
-    if (defined $opt{title}){
-	$report{TITLE} = $opt{title};
-    }
+    # Write out the text of everything to files
+    $self->write_reports();
 
-    make_report({ config => \%config,
-		  report_hash => \%report,
-		  opt => \%opt,
-	      });
 
 }
 
-sub make_mag_table{
-    my $arg_in = shift;
-    my $report = $arg_in->{report};
-    my $config = $arg_in->{config};
-    my $data = $arg_in->{data};
-    my %opt = %{$arg_in->{opt}};
-    
-    my @fields = qw( all_stars );
-    for my $rate ( sort( keys %{$config->{task}->{data}->{rates}} )){
-	push @fields, "${rate}_stars";
-  	push @fields, "${rate}_rate";
-    }
-    
-
-    my $table;
-
-    $table .= "\n";
-    $table .= qq{ <TABLE BORDER=1> };
-    $table .= "\n"; 
-
-    $table .= qq{ <TR><TH colspan=2></TH><TH colspan=2>Bad Track</TH> };
-    $table .= qq{ <TH colspan=2>Fail Track</TH> };
-    $table .= qq{ <TH colspan=2>OBC Bad Status</TH></TR> \n };
-
-    $table .= qq{ <TR><TH>Mag</TH><TH>N Stars</TH> };
-    $table .= qq{ <TH colspan=1>stars</TH> };
-    $table .= qq{ <TH colspan=1>rate</TH> };
-    $table .= qq{ <TH colspan=1>stars</TH> };
-    $table .= qq{ <TH colspan=1>rate</TH> };
-    $table .= qq{ <TH colspan=1>stars</TH> };
-    $table .= qq{ <TH colspan=1>rate</TH> };
-    $table .= qq{ </TR> \n };
-
-
-#    $table .= qq{ <TR><TH></TH><TH>n stars</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-#    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-#    $table .= qq{ </TR> \n };
-#
-
-#    $table .= qq{ <TH></TH> };
-
-    
-
-#    for my $field (@fields){
-#	$table .= qq{ <TH>$field</TH> };
-#    }
-#    $table .= "\n";
-
-    
-
-
-
-    for my $mag_bin ( sort( keys %{$data->{report}->{mag_bins}}) ){
-
-	my $dataref = $data->{report}->{mag_bins}->{$mag_bin};
-#	print "mag bin is $mag_bin \n";
-	$table .= qq{ <TR> };
-
-	$table .= qq{ <TD>$mag_bin - $dataref->{mag_stop} </TD> };
-	
-#	my %expected = %{calc_expected({ mission => $data->{mission}->{mag_bins}->{$mag_bin},
-#					 actual => $data->{report}->{mag_bins}->{$mag_bin},
-#					 config => $config })};
-
-#	for my $key (keys %expected){
-#	    $data->{report}->{mag_bins}->{$mag_bin}->{$key} = $expected{$key};
-#	}
-#	$data->{report}->{mag_bins}->{$mag_bin}->{expected} = \%expected;
-
-#	my %prob = %{calc_prob({ expected => \%expected,
-#				 actual => $data->{report}->{mag_bins}->{$mag_bin},
-#				 config => $config })};
-	
-	
-#	for my $key (keys %prob){
-#	    $data->{report}->{mag_bins}->{$mag_bin}->{$key} = $prob{$key};
-#	}
-
-
-	
-	for my $field (@fields){
-
-	    my $table_value;
-#	    print "$interval field is $field \n";
-	    if (defined $dataref->{$field}){
-		$table_value = $dataref->{$field};
-		my $format_value;
-		if ($field ne 'all_stars' and $field =~ /stars$/ and $table_value > 0){
-#		    print ref($dataref->{sql_where}), "\n";
-		    my $table_field = $field;
-		    $table_field =~ s/_stars$// ;
-		    my $star_table = make_star_table({ where => $dataref->{sql_where},
-						       field => $table_field,
-						       config => $config  });
-		    $mag_bin =~ s/\./p/;	
-		    my $url = '.';
-		    if (defined $opt{predefined}){
-			$url = $BASEURL . "/" . $opt{year} . "/" . $opt{id};
-		    }
-	    
-		    my $link = "${url}/" . lc($field) . "_${mag_bin}_list.html";
-		    my $hashname = uc($field) . "_${mag_bin}_LIST";
-#		    print "for $mag_bin field $field \n";
-#		    print "$hashname \n";
-#		    print "$link \n";
-		    $report->{$hashname} = $star_table;
-		    $format_value = "<A HREF=\"${link}\">${table_value}</A>";
-		}
-		else{
-#		print "$table_value \n";
-		    if ($table_value =~ /^\S*$/){
-			$format_value = $table_value;
-		    }
-
-		    if ($table_value =~ /^\d*$/ ){
-			$format_value = $table_value;
-		    }
-		    if ($table_value =~ /^\d*\.\d*$/ ){
-			$format_value = sprintf( "%6.4f", $table_value );
-		    }
-		}
-		if (defined $format_value ){
-		    $table .= qq{ <TD> $format_value </TD> };
-		}
-		else{
-		    $table .= qq{ <TD> </TD> };
-		    
-		}
-	    }
-	    else{
-		$table .= qq{ <TD> </TD> };
-	    }
-	}
-	
-	
-	$table .= qq{ </TR> \n };
-
-    }
-
-    $table .= qq{ </TABLE> };
-
-    $report->{MAG_TABLE} = $table;
-
-}
 
 sub make_star_table{
-    my $arg_in = shift;
-    my %where = %{$arg_in->{where}};
-    my $field;
-    if (defined $arg_in->{field}){
-	$field = $arg_in->{field};
+    # this a generic method to make html tables of stars
+    # this is called by the other table making scripts when stars meet criteria
+
+
+    my $self = shift;
+    my $list = qq{};
+    my $table_id = shift;
+    my $loop_args = shift;
+
+    my %config = %{$self->config};
+
+    return $list unless (defined $table_id);
+
+    my %where;
+    my $rate_info;
+    if (defined $loop_args){
+	%where = %{$loop_args->{loop_data}->{sql_where}};
+	$rate_info = $loop_args->{rate_cfg};
     }
-    my %config = %{$arg_in->{config}};
-
-
-    my $select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-					 fields => [ 'id', 'obsid', 'mag_exp', 'mag_obs_mean',
-						     'percent_not_tracking', 'percent_obc_bad_status' ],
-					 where => \%where,
-					 order => [ 'kalman_tstart' ],
-				     });
-
-    if (defined $field){
-	my %make_select = %{$config{task}->{data}->{rates}->{$field}};
+    else{
+	%where = %{$self->counts->{report}->{sql_where}};    
+    	for my $rate_ref (@{$config{task}->{data}->{rates}}){
+#	    unless ($rate_ref->{rate} eq $table_id){
+#		print "$table_id does not match \n";
+#	    }
+	    next unless ( $rate_ref->{name} eq $table_id );
+	    $rate_info = $rate_ref;
 	    
-	$select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+	}
 	
     }
     
+    # Build a query to get the stars
+
+    my @field_list = @{$config{task}->{data}->{lookup_table_fmt}->{fields}};;
+    my @format_list =  @{$config{task}->{data}->{lookup_table_fmt}->{field_fmt}};
+    my $select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
+					 fields => \@field_list,
+					 where => \%where,
+					 order => $config{task}->{data}->{lookup_table_fmt}->{order},
+				     });
+
+
+    # make a query to get the stars that meed the criteria for this table
+    my %make_select = %{$rate_info};
+    if (defined $make_select{operator}){
+	$select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+    }
+    else{
+	$select->add_where({ $make_select{field} => $make_select{value} });
+    }
+    
+
     my $handle = sql_connect( $config{task}->{db}->{connect_info} );
-
+    
     my $answer_list = $select->run({ handle => $handle, type => 'array' });
-
+    
     $handle->disconnect();
 
-#    print Dumper $answer_list;
 
-    my $list = qq{};
-#    $list = $select->get_select_string();
+#    # do trivial switch on fields if defined as select "bob as sam"
+    for my $idx (0 .. $#field_list){
+	my $cfg_field = $field_list[$idx];
+	if ($cfg_field =~ /\sas\s(\S*)/){
+	    $field_list[$idx] = $1;
+	}
+    }
 
-#    my @bad_star_list;
+    
     if (scalar(@{$answer_list})){
+	
 	$list .= qq{<TABLE BORDER=1>};
-	$list .= qq{<TR><TH>count</TH><TH>agasc_id</TH><TH>obsid</TH><TH>mag</TH><TH>mag_obs_mean</TH><TH>% not tracking</TH><TH>% obc bad status</TH></TR>};
-	my @key_list = qw( mag_exp mag_obs_mean percent_not_tracking percent_obc_bad_status);
-	my @format_list = ( '%5.2f', '%5.2f', '%4.2f', '%4.2f' );
-	my $count = 1;
+	$list .= qq{<TR><TH>};
+	$list .= join("</TH><TH>", @field_list);
+	$list .= qq{</TH></TR>};
+	
+	my $count = 0;
 	for my $starref (@{$answer_list}){
+	    $count++;
 	    if ($count > $config{task}->{limit_bad_list}){
-		$list .= "<TR><TD COLSPAN=7> Stars excluded over limit </TD></TR>\n";
+		my $colspan = scalar(@field_list);
+		$list .= "<TR><TD COLSPAN=$colspan> Stars excluded over limit </TD></TR>\n";
 		last;
 	    }
-	    $list .= sprintf("<TR><TD ALIGN=\"right\">%d</TD>", $count );
 	    my $id = ( defined $starref->{id} ) ? $starref->{id} : qq{};
-	    $list .= sprintf("<TD ALIGN=\"right\"><A HREF=\"%s\?id=%s;\">%12s</A></TD>", 
-			     $config{task}->{stats_print}, $id, $id);
-	    $list .= sprintf("<TD ALIGN=\"right\"><A HREF=\"%s\?sselect=obsid\;obsid1=%d\">%d</A></TD>", 
-			     $config{task}->{starcheck_print}, $starref->{obsid}, $starref->{obsid}); 
-	    for my $key_idx (0 ... $#key_list){
-		my $key = $key_list[$key_idx];
+	    for my $key_idx (0 ... $#field_list){
+		my $key = $field_list[$key_idx];
+		my $value = (defined $starref->{$key}) ? $starref->{$key} : qq{};
+		if ( defined $config{task}->{cgi_links}->{$key} ){
+		    my $url = $config{task}->{cgi_links}->{$key}->{url};
+		    my $get = $config{task}->{cgi_links}->{$key}->{get};
+		    $get =~ s/%VALUE%/$value/g;
+		    $list .= sprintf("<TD ALIGN=\"right\"><A HREF=\"%s\%s;\">",
+				     $url, $get);
+		    $list .= sprintf( $format_list[$key_idx], $value );
+		    $list .= qq{ </A></TD> };
+	
+		    next;
+		}
 		my $format = $format_list[$key_idx];
 		if (not defined $starref->{$key}){
 		    $list .= qq{ <TD></TD> };
@@ -380,21 +409,35 @@ sub make_star_table{
 		else{
 		    $list .= sprintf("<TD ALIGN=\"right\">$format</TD>", $starref->{$key});
 		}
-
-
+		
+		
 	    }
-#	    $list .=  sprintf( "<TR><TD ALIGN=\"right\">%d</TD><TD ALIGN=\"right\">%12s</TD><TD ALIGN=\"right\">%5s</TD><TD ALIGN=\"right\">%5.2f</TD><TD ALIGN=\"right\">%5.2f</TD><TD ALIGN=\"right\">%4.2f</TD><TD ALIGN=\"right\">%6.2f</TD></TR>", 
-#			       $count, $star{id}, $star{obsid}, $star{mag_exp}, $star{mag_obs_mean}, 
-#			       $star{percent_not_tracking}, $star{percent_obc_bad_status} );
 
+	    $list .= qq{</TR> \n};
 
-	    $count++;	    
 	}
 	
     }
 
-#    print $list, "\n";
+
+    my $label = "${table_id}_stars_list";
+    my %output = ( $label => $list );
+
+    if (not defined $self->output_html){
+	$self->output_html(\%output);
+    }
+    else{
+	my %exist_output = %{$self->output_html()};
+	for my $key (keys %output){
+	    $exist_output{$key} = $output{$key};
+	}
+	$self->output_html(\%exist_output); # which is probably not necessary
+    }
+
+
     return $list;
+    
+
 }
 
 
@@ -402,19 +445,19 @@ sub make_star_table{
     
 
 sub calc_prob{
-    my $arg_in = shift;
+    # given the actual and expected counts for a set of criteria,
+    # find the Poisson probability of the rate being less than or greater
+    # than the actual rate
 
-    my $config = $arg_in->{config};
-    my $actual = $arg_in->{actual};
-    my $expected = $arg_in->{expected};
-#    print "actual";
-#2#B    print Dumper $actual;
- #   print "expected";
- #   print Dumper $expected;
+    my $self = shift;
+    my $counts = shift;
+    my $actual = $counts->{report};
+    my $expected = $counts->{expected};
 
     my %prob;
 
-    for my $rate ( sort( keys %{$config->{task}->{data}->{rates}} )){
+    for my $rate_ref ( @{$self->config->{task}->{data}->{rates}} ){
+	my $rate = $rate_ref->{name};
 #        print "rate is $rate \n";
 	my $expected_counts = $expected->{"${rate}_stars"};
 	my $actual_counts = $actual->{"${rate}_stars"};
@@ -436,405 +479,314 @@ sub calc_prob{
 }
 
 
-sub calc_expected{
-    my $arg_in = shift;
-    my $config = $arg_in->{config};
-    my $mission = $arg_in->{mission};
-    my $actual = $arg_in->{actual};
 
- #   print Dumper $mission;
- #   print Dumper $actual;
+sub calc_expected{
+    # Multiply the number of stars for the interval by the expected rate 
+    # of the event (from the all mission data)
+
+    my $self = shift;
+    my $counts = shift;
+    my $mission = $counts->{mission};
+    my $actual = $counts->{report};
 
     my %expected;
 
     my $n_stars = $actual->{all_stars};
 
-    for my $rate ( sort( keys %{$config->{task}->{data}->{rates}} )){
+    for my $rate_ref ( @{$self->config()->{task}->{data}->{rates}} ){
+	my $rate = $rate_ref->{name};
 	if (defined $mission->{"${rate}_rate"}){
 	    $expected{"${rate}_rate"} = $mission->{"${rate}_rate"};
 	    $expected{"${rate}_stars"} = $n_stars * $mission->{"${rate}_rate"};
 	}
     }
-#    print Dumper %expected;
 
     return \%expected;
 
 }
 
-sub make_top_table{
+sub make_table{
+    # make an HTML table of all of the requested star rates
+    # if we are in making a loop table, use reduced reporting (no probabilities)
 
-    my $arg_in = shift;
-    my $report = $arg_in->{report};
-    my $config = $arg_in->{config};
-    my $expected = $arg_in->{expected};
-    my $actual = $arg_in->{actual};
-    my %opt = %{$arg_in->{opt}};
+    my $self = shift;
+    my $type = shift;
+    my $loop = shift;
 
-#    my @data = ( $expected , $actual );
-#    print Dumper @data;
+
+
+    my $config = $self->config();
+ 
+    my $expected = $self->counts->{expected};
+    my $actual = $self->counts->{report};
 
     my $table = qq{ <TABLE BORDER=1>\n };
-    
+
     my @fields = qw( name all_stars );
     my @colspan = qw( 1 1 );
-    for my $rate ( sort( keys %{$config->{task}->{data}->{rates}} )){
+    for my $rate_ref ( @{$config->{task}->{data}->{rates}} ){
+	my $rate = $rate_ref->{name};
 	push @fields, "${rate}_stars";
-	push @colspan, 4;
   	push @fields, "${rate}_rate";
-	push @colspan, 2;
-    }
- #   print Dumper @fields;
-#    $table .= qq{ <TH></TH> };
- 
-#    for my $field (@fields){
-#	$table .= qq{ <TH>$field</TH> };
-#    }
-    $table .= qq{ <TR><TH colspan=2></TH><TH colspan=6>Bad Track</TH> };
-    $table .= qq{ <TH colspan=6>Fail Track</TH> };
-    $table .= qq{ <TH colspan=6>OBC Bad Status</TH></TR> \n };
-
-    $table .= qq{ <TR><TH></TH><TH></TH> };
-    $table .= qq{ <TH colspan=4>stars</TH> };
-    $table .= qq{ <TH colspan=2>rate</TH> };
-    $table .= qq{ <TH colspan=4>stars</TH> };
-    $table .= qq{ <TH colspan=2>rate</TH> };
-    $table .= qq{ <TH colspan=4>stars</TH> };
-    $table .= qq{ <TH colspan=2>rate</TH> };
-    $table .= qq{ </TR> \n };
-
-
-    $table .= qq{ <TR><TH></TH><TH>n stars</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH><TH>P less</TH><TH>P more</TH> };
-    $table .= qq{ <TH>actual</TH><TH>pred.</TH> };
-    $table .= qq{ </TR> \n };
-
-    
-    $table .= "\n";
-
- #   for my $dataref (@data){
-
-    $table .= qq{ <TR> };
-  FIELD:
-    for my $field_idx (0 ... $#fields){
-	my $field = $fields[$field_idx];
-	my $cols = $colspan[$field_idx];
-	unless (defined $actual->{$field}){
-	    $table .= qq{ <TD colspan=$cols></TD> };
-	    next FIELD;
+	if ($type eq 'main'){
+	    push @colspan, 4;
+	    push @colspan, 2;
 	}
-	my $table_value = $actual->{$field};
-	if ($field ne 'all_stars' and $field =~ /stars$/ and $table_value > 0 and defined $actual->{sql_where}){
-#		    print ref($dataref->{sql_where}), "\n";
-	    my $table_field = $field;
-	    $table_field =~ s/_stars$//;
-	    my $star_table = make_star_table({ where => $actual->{sql_where},
-					       field => $table_field,
-					       config => $config  });
-	    my $url = '.';
-	    if (defined $opt{predefined}){
-		$url = $BASEURL . "/" . $opt{year} . "/" . $opt{id};
+	if ($type eq 'loop'){
+	    push @colspan, 1;
+	    push @colspan, 1;
+	}
+    }
+
+
+    # Top Header Row
+    $table .= qq{ <TR><TH colspan=2></TH> };
+    for my $rate_ref ( @{$config->{task}->{data}->{rates}} ){
+	my $rate = $rate_ref->{name};
+	if ($type eq 'main'){
+	    $table .= qq{ <TH colspan=6>$rate</TH> };
+	}
+	if ($type eq 'loop'){
+	     $table .= qq{ <TH colspan=2>$rate</TH> };
+	 }
+    }
+    $table .= qq{ </TR> \n };
+
+    # Grouping Header Row
+    $table .= qq{ <TR><TH></TH> };
+    if ($type eq 'main'){
+	$table .= qq{ <TH></TH> };
+    }
+    if ($type eq 'loop'){
+	$table .= qq{ <TH>N Stars</TH> };
+    }
+    
+
+    for my $rate_ref ( @{$config->{task}->{data}->{rates}} ){
+	if ($type eq 'main'){
+	    $table .= qq{ <TH colspan=4>stars</TH> };
+	    $table .= qq{ <TH colspan=2>rate</TH> };
+	}
+	if ($type eq 'loop'){
+	    $table .= qq{ <TH colspan=1>stars</TH> };
+	    $table .= qq{ <TH colspan=1>rate</TH> };
+	}
+
+    }
+    $table .= qq{ </TR> \n };
+
+    if ($type eq 'main'){
+
+	# Probability Header Row
+	$table .= qq{ <TR><TH></TH><TH>n stars</TH> };
+        for my $rate ( @{$config->{task}->{data}->{rates}}){
+	    for my $entry_ref (@{$config->{task}->{data}->{main_table_fmt}}){
+		my $label = $entry_ref->{label};
+		$table .= qq{ <TH> $label </TH> };
 	    }
-	    my $link = "${url}/" . lc($field) . "_list.html";
-	    my $list_key = uc($field) . "_LIST";
-	    $report->{$list_key} = $star_table;
-	    $table .= sprintf("<TD><A HREF=\"%s\">%d</A></TD><TD>%6.1f</TD><TD>%6.3f</TD><TD>%6.3f</TD>",
-			       $link, $table_value, $expected->{$field}, 
-			       $actual->{"${table_field}_pless"}, $actual->{"${table_field}_pmore"}) ;
-	    next FIELD;
 	}
-	if ($field ne 'all_stars' and $field =~ /stars$/ and $table_value == 0){
-	    my $table_field = $field;
-	    $table_field =~ s/_stars$//;
-	    $table .= sprintf("<TD>%d</TD><TD>%6.1f</TD><TD>%6.3f</TD><TD>%6.3f</TD>",
-			       $table_value, $expected->{$field}, 
-			       $actual->{"${table_field}_pless"}, $actual->{"${table_field}_pmore"}) ;
-	    next FIELD;
-	}	    
-	if ($field =~ /_rate$/){
-	    $table  .= sprintf("<TD>%6.3f</TD><TD>%6.3f</TD>", $table_value, $expected->{$field});
-	    next FIELD;
-	}
-	if ($table_value =~ /^\d+$/ ){
-	    $table .= qq{ <TD>$table_value</TD> };
-	    next FIELD;
-	}
-	if ($table_value =~ /^\d+\.\d+$/ ){
-	    $table .=  sprintf( "<TD>%6.4f</TD>", $table_value );
-	    next FIELD;
-	}
-	if ($table_value =~ /^\S*$/){
-	    $table .= sprintf( "<TD>%s</TD>", $table_value );
-	    next FIELD;
-	}
-
+	$table .= qq{ </TR> \n };
     }
-    $table .= qq{ </TR> \n };
-    
-#    $table .= qq{ <TR> };
-    
-#    for my $field (@fields ){
-##	print Dumper $data->{report};
-#	$field =~ s/_stars//g;
-##	print "$field \n";
-#	if (defined $actual->{"${field}_pless"}){
-##	    print $data->{report}->{"${field}_pless"}, "\n";
-#	    $table .= sprintf( "<TD>%6.4f</TD>" ,  $actual->{"${field}_pless"});
-#	}
-#	else{
-#	    $table .= qq{ <TD> </TD> };
-#	}
-#    }
-#    $table .= qq{ </TR> \n };
-#    $table .= qq{ <TR> };
-#    for my $field (@fields ){
-#	$field =~ s/_stars//g;
-#	if (defined $actual->{"${field}_pmore"}){
-#	    $table .= sprintf( "<TD>%6.4f</TD>" ,  $actual->{"${field}_pmore"});
-#	}
-#	else{
-#	    $table .= qq{ <TD> </TD> };
-#	}
-#    }
-#    $table .= qq{ </TR> \n };
-    
 
     $table .= "\n";
-    $table .= qq{ </TABLE> };
-    $table .= "\n"; 
-
-    $report->{MAIN_TABLE} = $table;
 
 
-}
+# Then the actual data Row or rows
     
-
-
-sub make_report_hash{
-    my $arg_in = shift;
-    
-    my %report_hash;
-
-    my $mission_rate = $arg_in->{mission_rate};
-    my $interval_rate = $arg_in->{interval_rate};
-    my %config = %{$arg_in->{config}};
-
-    $report_hash{N_STARS} = $interval_rate->{all};
-    $report_hash{N_BAD_STARS} = $interval_rate->{bad};
-    $report_hash{N_FAIL_STARS} = $interval_rate->{total_fail};
-    $report_hash{FAIL_RATE} = sprintf( "%6.2f", ($interval_rate->{total_fail}/$interval_rate->{all}) * 100);
-    $report_hash{BAD_RATE} = sprintf( "%6.2f", ($interval_rate->{bad}/$interval_rate->{all}) * 100 );
-
-    my $expected_rate = $mission_rate->{bad}/$mission_rate->{all};
-    
-    $report_hash{EXP_BAD_RATE} = sprintf( "%6.2f", $expected_rate * 100);
-    $report_hash{EXP_FAIL_RATE} = sprintf( "%6.2f", ($mission_rate->{total_fail}/$mission_rate->{all}) * 100);
-    
-    my $expected_counts = $interval_rate->{all} * $expected_rate;
-    
-    $report_hash{EXP_N} = sprintf( "%6.2f", $expected_counts);
-    $report_hash{EXP_N_FAIL} = sprintf( "%6.2f", ($interval_rate->{all} * ($mission_rate->{total_fail}/$mission_rate->{all})));
-    
-    my $lt_or_eq_prob = Math::CDF::ppois( $interval_rate->{bad}, $expected_counts );
-
-    $report_hash{PROB_N_LESS} = sprintf( "%6.4f", $lt_or_eq_prob);
-    
-# the greater than probability seems to break on 0 counts, so:
-    my $gt_or_eq_prob;
-    if ( $interval_rate->{bad} > 0 ){
-	$gt_or_eq_prob = 1 - Math::CDF::ppois( $interval_rate->{bad} - 1, $expected_counts );
+    my $table_data;
+    if ($type eq 'main'){
+	$table_data = $self->make_table_rows($type);
     }
     else{
-	$gt_or_eq_prob = 1;
+	if (not defined $loop){
+	    croak("No way to save loop date; no name defined \n");
+	}
+	$table_data = $self->make_table_rows($type, $loop);
+	$type = $loop . "_" . $type;
+    }
+
+    $table .= $table_data;
+
+    my %output = ( "${type}_table" => $table );
+
+    if (not defined $self->output_html){
+	$self->output_html(\%output);
+    }
+    else{
+	my %exist_output = %{$self->output_html()};
+	for my $key (keys %output){
+	    $exist_output{$key} = $output{$key};
+	}
+	$self->output_html(\%exist_output); # which is probably not necessary
     }
     
-    $report_hash{PROB_N_MORE} = sprintf( "%6.4f", $gt_or_eq_prob);
-    
-    return \%report_hash;
-}    
-
-#sub ctime_to_datetie{
-#    my $ctime = shift;
-#    my $fitsdate = Chandra::Time::convert($time,
-#					  { fmt_in => 'secs',
-#					    sys_in => 'tt',
-#					    fmt_out => 'fits',
-#					    sys_out => 'utc',
-#					});
-#    $fitsdate =~ /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})/;
-#    my ($year, $month, $monthday, $hour, $min, $sec, $fracsec) = ( $1, $2, $3, $4, $5, $6, $7);
-#    my $datetie = Date::Tie->new( year => $year,
-#				  month => $month,
-#				  monthday => $monthday,
-#				  hour => $hour,
-#				  minute => $min,
-#				  second => $sec,
-#				  frac_second => $fracsec );
-#    return $datetie;
-#}
-
-sub date_to_fits_format{
-
-    my $time_ref = shift;
-
-    my @pieces = ( 'year', 'month', 'monthday', 'hour', 'minute', 'second' );
-    for my $part (@pieces){
-	unless ( defined $time_ref->{$part}){
-	    die "$part not defined for time\n";
-	}
-    }
-    my $fits_string = sprintf("%4d-%02d-%02dT%02d:%02d:%02d.000",
-			      $time_ref->{year}, $time_ref->{month},
-			      $time_ref->{monthday}, $time_ref->{hour},
-			      $time_ref->{minute}, $time_ref->{second});
-
-    return $fits_string;
-
-
-}
-
-sub date_to_doy_format{
-    my $time_ref = shift;
-
-    my @pieces = ( 'year', 'yearday', 'hour', 'minute', 'second' );
-    for my $part (@pieces){
-	unless ( defined $time_ref->{$part}){
-	    die "$part not defined for time\n";
-	}
-    }
-    my $doy_string = sprintf("%4d:%03d:%02d:%02d:%02d.000",
-			      $time_ref->{year}, $time_ref->{yearday},
-			      $time_ref->{hour},
-			      $time_ref->{minute}, $time_ref->{second});
-
-    return $doy_string;
-
 }
 
 
+sub make_table_rows{
+    # "Linkify" the data elements as needed 
 
-sub make_report{
+    my $self = shift;
+    my $type = shift;
+    my $loopname = shift;
+    my $table;
+    my @data_rows = @{$self->get_data_rows($type, $loopname)};
+    for my $row (@data_rows){
+	$table .= qq{ <TR> };
+	for my $entry (@{$row}){
+	    my $value = $entry->{text};
+	    if (defined $entry->{link}){
+		my $link = $entry->{link};
+		my $url = $self->dir->{URL};
 
-
-    my $arg_in = shift;
-    my $config = $arg_in->{config};
-    my %report = %{$arg_in->{report_hash}};
-    my $opt = $arg_in->{opt};
-
-#    my $template_file = "${SHARE}/" . $report_config->{report_text};
-#    my $template_file = "${SHARE}/" . $config->{task}->{template_file};
-#    my $template_file = $config->{task}->{template_file};
-#    my $report_text = io($template_file)->slurp;
-
-    my @lists;
-    my @tables;
-#    print Dumper %report;
-    for my $keyword (keys %report){
-	if ( $keyword =~ /^.*LIST$/){
-	    push @lists, $keyword;
-	    next;
+		$table .= qq{ <TD><A HREF="${url}/${link}">${value}</A></TD };
+	    }
+	    else{
+		$table .= qq{ <TD>${value}</TD> };
+	    }
 	}
-	if ( $keyword =~ /^.*TABLE$/){
-	    push @tables, $keyword;
-	    next;
-	}
-#	my $file_keyword = uc($keyword);
-#	if (ref($report{$keyword}) eq 'ARRAY'){
-#	    my $text = '';
-#	    for my $line (@{$report{$keyword}}){
-#		$text .= "$line \n";
-#	    }
-#	    $report_text =~ s/%${file_keyword}%/$text/g;
-#	}
-#	else{
-#	    $report_text =~ s/%${file_keyword}%/$report{$keyword}/g;
-#	}
-    }
-#    print Dumper @lists;
-
-
-#    my $destfile = $config->{task}->{report_file};
-    my $yamlfile = $config->{task}->{report_yaml_file};
-
-    my $save_prefix = qq{};
-    my $data_save_prefix;
-#    if (defined $opt->{save_string}){
-#	$save_prefix = $opt->{save_string};
-#    }
- 
-
-    if (defined $opt->{save_path}){
-	if (defined $opt->{predefined}){
-#	    print "current save is ", $opt->{save_path}, "\n";
-	    $save_prefix = $WEBDATA . "/" . $opt->{save_path} . "/";
-	    $data_save_prefix = $SKADATA . "/" . $opt->{save_path} . "/";
-	    # watch the order here... don't extend save_path before data_save_path
-	    $opt->{data_save_path} = $SKADATA . "/" . $opt->{save_path};
-	    $opt->{save_path} = $WEBDATA . "/" . $opt->{save_path};
-
-	}
-	else{
-	    $save_prefix = $opt->{save_path} . "/";
-	}
+	$table .= qq{ </TR> \n };
     }
 
-    if (not defined $data_save_prefix){
-	$data_save_prefix = $save_prefix;
+    return $table;
+}
+
+
+sub get_data_rows{
+    # Format the rate data as needed and figure out links for stuff like agasc_id and obsid
+
+    my $self = shift;
+    my $type = shift;
+    my $loopname = shift;
+    my @rows;
+    if ($type eq 'main'){
+	my %counts = %{$self->counts};
+	my @row = ( { text => 'report' } );
+	push @row, { text => $counts{report}->{all_stars} };
+	for my $rate_ref (@{$self->config->{task}->{data}->{rates}}){
+	    my $rate = $rate_ref->{name};
+#	    print "rate is $rate \n";
+	    for my $field_ref (@{$self->config->{task}->{data}->{main_table_fmt}}){
+		my ( $source, $value_label ) = ($field_ref->{source}, $field_ref->{value});
+		my $fmt = $field_ref->{fmt};
+#		print "$source $value_label \n";
+		my $value = sprintf( "$fmt", $self->counts->{$source}->{"${rate}_${value_label}"});
+		if (($source eq 'report') and ($value_label eq 'stars') and ($value > 0)){
+		    my $link = "${rate}_stars_list.html";
+		    $self->make_star_table("${rate}");
+#		    $output{"${rate}_stars"} = $self->make_star_table("${rate}_stars");
+		    push @row, { text => $value,
+				 link => $link };
+		}
+		else{
+		    push @row, { text => $value };
+		}
+	    }
+
+	}
+	push @rows, \@row;
+	return \@rows;	
     }
+    if ($type eq 'loop'){
+
+	my $which_loop;
+	for my $loopidx (0 ... scalar(@{$self->config->{task}->{data}->{loops}})-1 ){
+	    my $loop_cfg = $self->config->{task}->{data}->{loops}->[$loopidx];
+	    if ($loop_cfg->{name} eq $loopname ){
+		$which_loop = $loopidx;
+		last;
+	    }
+	}
+	for my $loop_data_ref (@{$self->{counts}->{report}->{loops}->[$which_loop]}){
+	    my @row = ( { text => sprintf( $loop_data_ref->{start} . " - " . $loop_data_ref->{stop} )},
+			{ text => sprintf( $loop_data_ref->{all_stars} )});
+	    for my $rate_ref (@{$self->config->{task}->{data}->{rates}}){
+	    my $rate = $rate_ref->{name};
+		for my $row_entry (@{$self->config->{task}->{data}->{loop_table_fmt}}){
+		    my ( $source, $value_label ) = ($row_entry->{source}, $row_entry->{value});
+		    my $fmt = $row_entry->{fmt};
+#		print "$source $value_label \n";
+		    my $value = sprintf( "$fmt", $loop_data_ref->{"${rate}_${value_label}"});
+		    if (($source eq 'report') and ($value_label eq 'stars') and ($value > 0)){
+			my $loop_id = $loop_data_ref->{name};
+			my $custom_rate = "${rate}_${loop_id}";
+			$custom_rate =~ s/\./p/g;
+			my $link = "${custom_rate}_stars_list.html";
+			$self->make_star_table("${custom_rate}", { rate_cfg => $rate_ref, loop_data => $loop_data_ref });
+   			push @row, { text => $value,
+				     link => $link };
+
+		    }
+		    else{
+			push @row, { text => $value };
+		    }
+		    
+		    
+		}
+
+	    
+		}
+
+		push @rows, \@row;
+	    }
+
+
+	}
+	return \@rows;
+    }
+
+
+sub write_reports{
+    # write out the text data
+
+    my $self = shift;
+    my %dir = %{$self->dir()};
 
 #    use Data::Dumper;
-#    print Dumper $opt;
+#    print Dumper %dir;
 
-
-#    print "destfile is $destfile \n";
-    unless ($opt->{dryrun}){
+##    print "destfile is $destfile \n";
+    unless ($self->opt->{dryrun}){
 #	print "in writing section \n;";
 
-	if (defined $opt->{save_path}){
-	    mkpath( $opt->{save_path}, 1 );
+	if (defined $dir{SAVE_PATH}){
+	    mkpath( $dir{SAVE_PATH}, 1 );
 	}
-	if (defined $opt->{data_save_path}){
-	    mkpath( $opt->{data_save_path}, 1);
-	}
-	
-	my $index_infile = $config->{task}->{index_file};
-	if ($opt->{predefined}){
-	    $index_infile = $config->{task}->{predefined_index_file};
+	if (defined $dir{DATA_SAVE_PATH}){
+	    mkpath( $dir{DATA_SAVE_PATH}, 1);
 	}
 	
-	if (-e "${SHARE}/${index_infile}"){
-	    my $index = io("${SHARE}/${index_infile}")->slurp;
-	    io("${save_prefix}/index.html")->print($index);
+	my $index_infile = $self->config->{task}->{templates}->{index_file};
+	if ($self->opt->{predefined}){
+	    $index_infile = $self->config->{task}->{templates}->{predefined_index_file};
 	}
-#	print "${save_prefix}${destfile} \n";
-#	io("${save_prefix}${destfile}")->print($report_text);
 
-	for my $list (@lists){
-	    my $file = lc($list);
-	    io("${save_prefix}${file}.html")->print($report{$list});
-	    # and remove the lists from the report hash
-	    delete $report{$list};
+
+
+	if (-e "$dir{SHARE}/${index_infile}"){
+#	if (-e "${index_infile}"){
+	    my $index = io("$dir{SHARE}/${index_infile}")->slurp;
+#	    my $index = io("${index_infile}")->slurp;
+	    io("$dir{SAVE_PATH}/index.html")->print($index);
 	}
-	# let's manually clear the tables so they don't ugly-up the yaml
-	for my $table (@tables){
-	    my $file = lc($table);
-	    io("${save_prefix}${file}.htm")->print($report{$table});
-	    delete $report{$table};
+	else{
+	    croak("Error, no template index file defined \n");
 	}
+	# Each of the HTML pieces gets its own file
+	for my $html_piece (keys %{$self->output_html()}){
+	    
+	    if ($html_piece =~ /list$/){
+		io("$dir{SAVE_PATH}/${html_piece}.html")->print($self->output_html->{$html_piece});
+	    }
+	    else{
+		io("$dir{SAVE_PATH}/${html_piece}.htm")->print($self->output_html->{$html_piece});
+	    }
+	}
+
+	my $yamlfile = $self->config->{task}->{templates}->{report_yaml_file};
 
 	if (defined $yamlfile){
-	    io("${data_save_prefix}${yamlfile}")->print(Dump(\%report));
-	}
-	
-	#let's write out everything that is left except the DATA
-	for my $key (keys %report){
-	    unless ($key eq 'DATA' ){
-		my $file = lc($key);
-		io("${save_prefix}${file}.htm")->print($report{$key});
-	    }
+	    io("$dir{DATA_SAVE_PATH}/${yamlfile}")->print(Dump(\%{$self->report_yaml()}));
 	}
 
     }
@@ -844,10 +796,6 @@ sub make_report{
     
 
 }
-
-
-
-
 
 sub define_interval{
 
@@ -885,101 +833,55 @@ sub define_interval{
 
 }
 
-
-sub bad_track_rate{
-
-    my $arg_in = shift;
-    my %interval = %{$arg_in->{interval}};
-    my %config = %{$arg_in->{config}};
-   
-    my $BAD_PERCENT = $config{task}->{bad_telem_threshold};
-
-    my $handle = sql_connect( $config{task}->{db}->{connect_info} );
-
-    my $exclude_bad_obsid = 'not in (select obsid from expected_bad_obsids)';
-    my $select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-					 fields => [ "count(id) as n" ],
-					 where => { 
-					     obsid => \$exclude_bad_obsid,      
-					     type => { '!=' => 'FID'},
-					     id => { '!=' => '---' },
-					     kalman_tstart => { '>=' => $interval{tstart} },
-					     kalman_tstop => { '<=' => $interval{tstop} },
-					 },					       
-				     });
-    
-
-#    print $select->get_select_string(), "\n";
-    my $count_all_ref =  $select->run({handle => $handle, type => 'array' });
-    my $count_all = $count_all_ref->[0]->{n};
-
-    $select->add_where({ 'percent_not_tracking' => { '>=' => $BAD_PERCENT }});
-
-#    print $select->get_select_string(), "\n";
-
-    my $count_bad_ref = $select->run({handle => $handle, type => 'array' });
-    my $count_bad = $count_bad_ref->[0]->{n};
-
-    # total failures
-    $select->add_where({ 'percent_not_tracking' => 100 });
-
-    my $count_fail_ref = $select->run({handle => $handle, type => 'array' });
-    my $count_fail = $count_fail_ref->[0]->{n};
-
-
-
-    $handle->disconnect();
-
-    my %result = ( bad => $count_bad,
-		   all => $count_all,
-		   total_fail => $count_fail,
-		   tstart => $interval{tstart},
-		   tstop => $interval{tstop},
-		   );
-
-#    print Dumper %result;
-
-    return \%result;
-
-}
-
-
+#
+#
 sub get_counts{
-    my $arg_in = shift;
-    my $mag_zoom_ref;
-    if (defined $arg_in->{mag_zoom}){
-	$mag_zoom_ref = $arg_in->{mag_zoom};
-    }
+
+    my $self = shift;
+
 
     my %result;
 
-    my %time_ranges = ( mission => $arg_in->{mission_interval},
-		       report => $arg_in->{report_interval});
+    my %time_ranges = ( mission => $self->interval()->{mission},
+			report => $self->interval()->{report});
 
-    my %config = %{$arg_in->{config}};
-
-    my $handle = sql_connect( $config{task}->{db}->{connect_info} );
+#    my %config = %{$arg_in->{config}};
+#
+    my $handle = sql_connect( $self->config()->{task}->{db}->{connect_info} );
 
     my $exclude_bad_obsid = 'not in (select obsid from expected_bad_obsids)';    
 
     for my $select_range (keys %time_ranges ){
+
+#	print "for my $select_range \n";
 
 	my $time_range = $time_ranges{$select_range};
 	my %result_range = ( name => $select_range,
 			     tstart => $time_range->{tstart},
 			     tstop => $time_range->{tstop},
 			     );
-	my %where = (
-		     obsid => \$exclude_bad_obsid,      
-		     type => { '!=' => 'FID'},
-#		     id => { '!=' => '---' },
-		     kalman_tstart => { '>=' => $time_range->{tstart} },
-		     kalman_tstop => { '<=' => $time_range->{tstop} },
-		     );					       
+	my $time_start_field = $self->config->{task}->{db}->{time_start_field};
+	my $time_stop_field = $self->config->{task}->{db}->{time_stop_field};
+	
+	my %time_where;
+	if ("$time_start_field" eq "$time_stop_field"){
+	    %time_where = ( "$time_start_field" => { '>=' => $time_range->{tstart} ,
+						     '<=' => $time_range->{tstop} } );
+	}
+	else{
+	    %time_where = (  "$time_start_field" => { '>=' => $time_range->{tstart} },
+			     "$time_stop_field"  => { '<=' => $time_range->{tstop} },
+			     );
+	}
+	
+
+	my %where = %time_where;
+	$where{obsid} = \$exclude_bad_obsid;
 
 
-	my $default_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-						     fields => [ "count(id) as n" ],
+	
+	my $default_select = Ska::SQL::Select->new({ table => $self->config->{task}->{db}->{table},
+						     fields => [ $self->config->{task}->{data}->{count_field} . " as n" ],
 						     where => \%where,
 						 });
 	
@@ -989,90 +891,116 @@ sub get_counts{
 	$result_range{all_stars} = $all_stars;
 	$result_range{"sql_where"} = \%where;
 	
-	for my $rate_type ( keys %{$config{task}->{data}->{rates}} ){
-	    my %make_select = %{$config{task}->{data}->{rates}->{$rate_type}};
+	for my $rate_ref ( @{$self->config->{task}->{data}->{rates}} ){
+
 	    
-	    $default_select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+	    my $rate_type = $rate_ref->{name};
+	   
+#	    my %make_select = %{$self->config->{task}->{data}->{rates}->{$rate_type}};
+	    my %make_select = %{$rate_ref};
+	    
+	    if (defined $make_select{operator}){
+		$default_select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+	    }
+	    else{
+		$default_select->add_where({ $make_select{field} => $make_select{value} });
+	    }
 
 #	    print $default_select->get_select_string(), "\n";
 	    
 	    my $n_stars =  $default_select->run({handle => $handle, type => 'array'})->[0]->{n};
 
 
-
 	    $result_range{"${rate_type}_stars"} = $n_stars;
 
 	    $result_range{"${rate_type}_rate"} = $all_stars != 0 ? ( $n_stars / $all_stars) : 0;
 
+	    
 	    # reset where
 	    $default_select->where(\%where);
 
 	}
 
+	if (defined $self->config->{task}->{data}->{loops}){
 
-
-	if (defined $mag_zoom_ref){
-	    my %all_mag_bin;
-	    for ( my $mag = $mag_zoom_ref->{mag_start}; $mag < $mag_zoom_ref->{mag_stop}; $mag += $mag_zoom_ref->{mag_bin} ){
-
-		my $bin = $mag_zoom_ref->{mag_bin};
-#		print "mag is $mag \n";
-		my %mag_result;
-		$mag_result{mag_start} = $mag;
-		$mag_result{mag_stop} = ($mag + $bin);
-
-		# copy the where
-		my %mag_where;
-		for my $key (keys %where){
-		    $mag_where{$key} = $where{$key};
-		}
-		$mag_where{mag_exp} = { '>=' => $mag, 
-					'<'  => $mag + $bin };
-
-		$mag_result{"sql_where"} = \%mag_where;
+	    my @all_loop;
+	    for my $loop_def (@{$self->config->{task}->{data}->{loops}}){
+		my %loop_cfg = %{$loop_def};
+		my @loop;
+#	    print Dumper $mag_zoom_ref;
+		for ( my $chunk = $loop_cfg{start}; $chunk < $loop_cfg{stop}; $chunk += $loop_cfg{bin} ){
+#		my $bin = $mag_zoom_ref->{mag_bin};
+#		    print "mag is $mag \n";
+		    my %pass_result;
+		    $pass_result{start} = $chunk;
+		    $pass_result{stop} = ($chunk + $loop_cfg{bin});
+		    $pass_result{bin_over} = $loop_cfg{bin_over};
+		    
+		    # copy the where
+		    my %loop_where;
+		    for my $key (keys %where){
+			$loop_where{$key} = $where{$key};
+		    }
+		    $loop_where{$loop_cfg{bin_over}} = { '>=' => $chunk, 
+							 '<'  => $chunk + $loop_cfg{bin} };
+		    
+		    $pass_result{"sql_where"} = \%loop_where;
 #		print "$mag \n";
 #		print Dumper \%where;
-		$default_select->where(\%mag_where);
+		    $default_select->where(\%loop_where);
+		    
 
-		my $mag_all_stars =  $default_select->run({handle => $handle, type => 'array' })->[0]->{n};
-		$mag_result{all_stars} = $mag_all_stars;
-	
-
-
-		for my $rate_type ( keys %{$config{task}->{data}->{rates}} ){
-		    my $n_stars;
-		    if ($mag_all_stars == 0){
-			$n_stars = 0;
-		    }
-		    else{
-			my %make_select = %{$config{task}->{data}->{rates}->{$rate_type}};
-
-
+		    my $pass_all_stars =  $default_select->run({handle => $handle, type => 'array' })->[0]->{n};
+		    $pass_result{all_stars} = $pass_all_stars;
+#		print Dumper %mag_result;
+#
+		    for my $rate_ref ( @{$self->config->{task}->{data}->{rates}} ){
 			
-			$default_select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+			my $rate_type = $rate_ref->{name};
+			my $n_stars;
+			if ($pass_all_stars == 0){
+			    $n_stars = 0;
+			}
+			else{
+			    my %make_select = %{$rate_ref};
 
+			    
+			    if (defined $make_select{operator}){
+				$default_select->add_where({ $make_select{field} => { $make_select{operator} => $make_select{value} }});
+			    }
+			    else{
+				$default_select->add_where({ $make_select{field} => $make_select{value} });
+			    }
+			    
 #		    print $default_select->get_select_string(), "\n";
-		    
-			$n_stars =  $default_select->run({handle => $handle, type => 'array'})->[0]->{n};
-
-
-		    }
+			    
+			    $n_stars =  $default_select->run({handle => $handle, type => 'array'})->[0]->{n};
+			    
+			    
+			}
 #		    print "n is $n_stars \n";
-
-
-
-		    $mag_result{"${rate_type}_stars"} = $n_stars;
+			
+			
+			
+			$pass_result{"${rate_type}_stars"} = $n_stars;
+			
+			$pass_result{"${rate_type}_rate"} = $pass_all_stars != 0 ? ( $n_stars / $pass_all_stars ) : 0;
+			
+			$default_select->where(\%loop_where);
+		    }
 		    
-		    $mag_result{"${rate_type}_rate"} = $mag_all_stars != 0 ? ( $n_stars / $mag_all_stars ) : 0;
-		    
-		    $default_select->where(\%mag_where);
+#
+#		print Dumper %mag_result;
+		    $pass_result{name} = $chunk;
+
+		    push @loop, \%pass_result;
 		}
+		
+		push @all_loop, \@loop;
+	    }		
 
+	    $result_range{loops} = \@all_loop;
 
-		$all_mag_bin{"$mag"} = \%mag_result;
-	    }
-	    
-	    $result_range{mag_bins} = \%all_mag_bin;
 
 	}
 
@@ -1081,24 +1009,12 @@ sub get_counts{
 
     }
 
-    
-#    my $count_bad_ref = $select->run({handle => $handle, type => 'array' });
-#    my $count_bad = $count_bad_ref->[0]->{n};
-#
-#    # total failures
-#    $select->add_where({ 'percent_not_tracking' => 100 });
-#
-#    my $count_fail_ref = $select->run({handle => $handle, type => 'array' });
-#    my $count_fail = $count_fail_ref->[0]->{n};
-#
-
-#    print Dumper %result;
     return \%result;
 }
-
-
-
-
+#
+#
+#
+#
 sub make_plots{
 
 #=pod
@@ -1118,15 +1034,21 @@ sub make_plots{
 #
 #=cut
 #
-    
-    my $arg_in = shift;
-    my %config = %{$arg_in->{config}};
-    my %opt = %{$arg_in->{opt}};
+    my $self = shift;
+   
+#    my $arg_in = shift;
+    my %config = %{$self->config()};
+    my %opt = %{$self->opt()};
 
-    my %interval = %{define_interval({ tstart => $opt{tstart},
-				       tstop => $opt{tstop}}) };
+    my $time_start_field = $config{task}->{db}->{time_start_field};
+    my $time_stop_field = $config{task}->{db}->{time_stop_field};
+
+    my %report_interval = %{define_interval({ tstart => $opt{tstart},
+					      tstop => $opt{tstop}}) };
+    my %mission_interval = %{define_interval({ tstart => $opt{calc_rate_tstart},
+						tstop => $opt{calc_rate_tstop}})};
     
-    my $BAD_PERCENT = $config{task}->{bad_telem_threshold};
+#    my $BAD_PERCENT = $config{task}->{bad_telem_threshold};
     
     $ENV{PGPLOT_BACKGROUND} = 'white';
     $ENV{PGPLOT_FOREGROUND} = 'black';
@@ -1140,8 +1062,8 @@ sub make_plots{
 #    }
     if (defined $opt{save_path}){
 	if (defined $opt{predefined}){
-	    $save_prefix .= $WEBDATA . "/" . $opt{save_path} . "/";
-	    $opt{save_path} = $WEBDATA . "/" . $opt{save_path};
+	    $save_prefix .= $self->dir->{WEBDATA} . "/" . $opt{save_path} . "/";
+	    $opt{save_path} = $self->dir->{WEBDATA} . "/" . $opt{save_path};
 	}
 	else{
 	    $save_prefix .= $opt{save_path} . "/";
@@ -1158,7 +1080,7 @@ sub make_plots{
 #	use Data::Dumper;
 #	print Dumper %plotcfg;
 	my @plot_array;
-	my $plot_islog = 0;
+	my $plot_padlog = 0;
 
 	# make the silly array/hash that pgs_plot
 	if ( defined $plotcfg{pgs_plot}){
@@ -1166,13 +1088,22 @@ sub make_plots{
 		for my $key (keys %{$pgs_elem}){ 
 		    push @plot_array, $key => $pgs_elem->{$key};
 		    if ($key eq 'logy'){
-			$plot_islog = $pgs_elem->{$key};
+			$plot_padlog = $pgs_elem->{$key};
 		    }
 		}
 						 
 	    }
 
 	}
+
+	if (defined $plotcfg{pad_log}){
+	    unless ($plotcfg{pad_log}){
+		$plot_padlog = 0;
+	    }
+	}
+
+	my $table = ( defined $plotcfg{table} ) ? $plotcfg{table} : $config{task}->{db}->{table};
+	
 
 #	print "curr plot array\n";
 #	use Data::Dumper;
@@ -1188,108 +1119,246 @@ sub make_plots{
 #
 #=cut
 
-	    my $bin_type = $plotcfg{bin_over};
+	    my $top_level_bin_type;
+	    if (defined $plotcfg{bin_over}){
+		$top_level_bin_type = $plotcfg{bin_over};
+	    }
 	    
 	    my $start = $plotcfg{start};
 	    my $stop =  $plotcfg{stop};
 	    my $bin_size =  $plotcfg{bin};
 	    
 	    
-	    my @bad_x100;
-	    my @good;
+	    my @red;
+	    my @black;
 	    my @data_bin;
 	    
 	    for ( my $bin = $start; $bin < $stop; $bin += $bin_size ){
 		
 		push @data_bin, $bin;
 		
-		my $bad_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-						     fields => [ "count(*) as not_tracked" ],
-							 where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
-								    'percent_not_tracking' => { '>=' => $BAD_PERCENT },
-#								      percent_not_tracking => { '>=' => $BAD_PERCENT },
-								    type => { '!=' => 'FID'},
-								    kalman_tstart => { '>=' => $interval{tstart} },
-								    kalman_tstop => { '<=' => $interval{tstop} },
-								},					       
-						     });
+		if (defined $plotcfg{black}){
 
-#	print $bad_track_select->get_select_string();
-		
-		my $answer_ref = $bad_select->run({ handle => $handle, type => 'array' });
-		push @bad_x100, $answer_ref->[0]->{not_tracked}*100;
-#	    print "at $mag, bad=", $answer_ref->[0]->{not_tracked}*100, "\n";
-		
-	    
-		my $good_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
-							  fields => [ "count(*) as tracked" ],
-							  where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
-								     'percent_not_tracking'  => { '<' => $BAD_PERCENT },
-								     type => { '!=' => 'FID' },
-								     kalman_tstart => { '>=' => $interval{tstart} },
-								     kalman_tstop => { '<=' => $interval{tstop} },
-								     
-								 },						
-						      });
-		
-#	    print $good_track_select->get_select_string();
+		    my %interval = %report_interval;
+		    if (defined $plotcfg{interval}){
+			if ( $plotcfg{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+		    if (defined $plotcfg{black}->{interval}){
+			if ($plotcfg{black}->{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
 
-		my $good_ref = $good_select->run({ handle => $handle, type => 'array' });
+		    my $bin_type = (defined $plotcfg{black}->{bin_over}) ? $plotcfg{black}->{bin_over} : $top_level_bin_type;
+		    
+		    my %where = (defined $plotcfg{black}->{where} ) ? %{$plotcfg{black}->{where}} : ();
+		    my %time_where;
+		    if ("$time_start_field" eq "$time_stop_field"){
+			%time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								 '<=' => $interval{tstop} } );
+		    }
+		    else{
+			%time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					 "$time_stop_field"  => { '<=' => $interval{tstop} },
+					 );
+		    }
+
+		    my $black_select = Ska::SQL::Select->new({ table => $table,
+							      fields => $plotcfg{black}->{fields},
+							       where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+									 %where,
+									 %time_where,
+								     },						
+							  });
+		    
+#		    print $black_select->get_select_string(), "\n";
+		    my $black_ref = $black_select->run({ handle => $handle, type => 'array' });
+		    my $black_scale;
+		    if ( defined $plotcfg{black}->{scale} ){
+			if ( $plotcfg{black}->{scale} =~ /fraction/){
+			    my $black_all_select = Ska::SQL::Select->new({ table => $table,
+									   fields => $plotcfg{black}->{fields},
+									   where =>  { 
+									       %where,
+									       %time_where,
+									   },						
+								       });
+			    my $black_all_ref = $black_all_select->run({ handle => $handle, type => 'array' });
+			    my $black_all_cnt = $black_all_ref->[0]->{black};
+			    if ($black_all_cnt > 0){
+				$black_scale = 1/($black_all_cnt) ;
+			    }
+			}
+			else{
+			    $black_scale = $plotcfg{black}->{scale};
+			}
+				
+		    }
+		    if (not defined $black_scale){
+			$black_scale = 1;
+		    }
+
+		    push @black, $black_ref->[0]->{black} * $black_scale ;
+		    
+#		    print "$bin black ", $black_ref->[0]->{black}, "\n";
+		    %interval = %{define_interval({ tstart => $opt{tstart},
+						    tstop => $opt{tstop}}) };
+
+
+		}
+		if (defined $plotcfg{red}){
+		    my %interval = %report_interval;
+		    if (defined $plotcfg{interval}){
+			if ( $plotcfg{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+		    if (defined $plotcfg{red}->{interval}){
+			if ($plotcfg{red}->{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+
+
+		    my $bin_type = (defined $plotcfg{red}->{bin_over}) ? $plotcfg{red}->{bin_over} : $top_level_bin_type;
+		    my %where = (defined $plotcfg{red}->{where} ) ? %{$plotcfg{red}->{where}} : ();
+		    my %time_where;
+		    if ("$time_start_field" eq "$time_stop_field"){
+			%time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								 '<=' => $interval{tstop} } );
+		    }
+		    else{
+			%time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					 "$time_stop_field"  => { '<=' => $interval{tstop} },
+					 );
+		    }
+
+
+		    my $red_select = Ska::SQL::Select->new({ table => $table,
+							     fields => $plotcfg{red}->{fields},
+							     where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+									%where,
+									%time_where,
+									
+								    },						
+							 });
+		    
+#		    print Dumper $red_select;
+		    my $red_ref = $red_select->run({ handle => $handle, type => 'array' });
+		    my $red_scale;
+		    if ( defined $plotcfg{red}->{scale} ){
+			if ( $plotcfg{red}->{scale} =~ /fraction/){
+			    my $red_all_select = Ska::SQL::Select->new({ table => $table,
+									 fields => $plotcfg{red}->{fields},
+									 where =>  { 
+									     %where,
+									     %time_where,
+									 },						
+								     });
+			    my $red_all_ref = $red_all_select->run({ handle => $handle, type => 'array' });
+			    my $red_all_cnt = $red_all_ref->[0]->{red};
+			    if ($red_all_cnt > 0){
+				$red_scale = 1/($red_all_cnt) ;
+			    }
+			}
+			else{
+			    $red_scale = $plotcfg{red}->{scale};
+			}
+			
+		    }
+		    if (not defined $red_scale){
+			$red_scale = 1;
+		    }
+
+		    push @red, $red_ref->[0]->{red} * $red_scale ;
+#		    print "$bin red ", $red_ref->[0]->{red}, "\n";
+		}
 		
-		push @good, $good_ref->[0]->{tracked};
+		
 	    }
 
 #	    print Dumper @data_bin;
-#	    print Dumper @good;
-#	    print Dumper @bad_x100;
+#	    print Dumper @black;
+#	    print Dumper @red_x100;
+
 
 	    # find min non-zero value
-	    my $good_pdl = pdl(@good);
-	    my $min_non_zero = $good_pdl->( which( $good_pdl > 0) )->min();
-	    my $y_good = $plot_islog ? $good_pdl + ($min_non_zero/10.) : $good_pdl;
-	    my $bad_pdl = pdl(@bad_x100);
-	    my $y_bad = $plot_islog ? $bad_pdl + ($min_non_zero/10.) : $bad_pdl;
-
-	    push @plot_array,   
-	    'x' => pdl(@data_bin),
-	    'y' => $y_good,
-	    options => {center => 1},
-	    charsize => {symbol => 0.7,
-			 title => 2.0,
-			 axis => 2.0,
-		     },
-	    plot => 'bin',
-	    'x' => pdl(@data_bin)+0.01,
-	    'y' => $y_bad,
-	    options => {center => 1},
-	    charsize => {symbol => 0.7,
-			 title => 2.0,
-			 axis => 2.0,
-		     },
-	    color => { line => 'red' },
-	    plot => 'bin',
-	    ;
-
+	    if (scalar(@black)){
+		my $black_pdl = pdl(@black);
+		my $min_non_zero = $black_pdl->( which( $black_pdl > 0) )->min();
+		my $y_black =  $plot_padlog ? $black_pdl + ($min_non_zero/10.) : $black_pdl;
 		
+		push @plot_array,   
+		'x' => pdl(@data_bin),
+		'y' => $y_black,
+		options => {center => 1},
+		charsize => {symbol => 0.7,
+			     title => 2.0,
+			     axis => 2.0,
+			 },
+		plot => 'bin',
+		;
+		
+		if (scalar(@red)){
+		    my $red_pdl = pdl(@red);
+		    my $y_red = $plot_padlog ? $red_pdl + ($min_non_zero/10.) : $red_pdl;
+		    
+		    
+		    push @plot_array,
+		    'x' => pdl(@data_bin)+0.01,
+		    'y' => $y_red,
+		    options => {center => 1},
+		    charsize => {symbol => 0.7,
+				 title => 2.0,
+				 axis => 2.0,
+			     },
+		    color => { line => 'red' },
+		    plot => 'bin',
+		    ;
+		    
+		}
+	    }
 
 
 	}
     
 	    
-	  #	print scalar(@mag_bin), ":", scalar(@good_track), ":", scalar(@bad_track_x100), ":", scalar(@bad_color_x100), ":", scalar(@good_color), "\n";
+	  #	print scalar(@mag_bin), ":", scalar(@black_track), ":", scalar(@red_track_x100), ":", scalar(@red_color_x100), ":", scalar(@black_color), "\n";
 	    
 	    # if anything is defined in the config file, use it
 	    
 	    
-	    if ($plot =~ /scatter/){
+	if ($plot =~ /scatter/){
+	    my %interval = %report_interval;
+	    if (defined $plotcfg{interval}){
+		if ( $plotcfg{interval} eq 'mission'){
+		    %interval = %mission_interval;
+		}
+	    }
+
+		my %where = (defined $plotcfg{where}) ? %{$plotcfg{where}} : ();
 #		print "$plot is scatter \n";
-		my $all_select = Ska::SQL::Select->new({ table => $config{task}->{db}->{table},
+		my %time_where;
+		if ("$time_start_field" eq "$time_stop_field"){
+		    %time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+							     '<=' => $interval{tstop} } );
+		}
+		else{
+		    %time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+				     "$time_stop_field"  => { '<=' => $interval{tstop} },
+				     );
+		}
+
+
+		my $all_select = Ska::SQL::Select->new({ table => $table,
 							 fields => [ "$plotcfg{x} as x", "$plotcfg{y} as y"],
-							 where =>  { type => { '!=' => 'FID'},
-								     kalman_tstart => { '>=' => $interval{tstart} },
-								     kalman_tstop => { '<=' => $interval{tstop} },
+							 where => { %where,
+								    %time_where,
 								 },
 						     });
+# { type => { '!=' => 'FID'},
 		
 		my $query = $all_select->get_select_string();
 		
@@ -1311,14 +1380,14 @@ sub make_plots{
 			      );
 		
 #		 'x' => [[ $mag_plot_start, $mag_plot_stop ]],
-#		 'y' => [[ ($BAD_PERCENT)/100., ($BAD_PERCENT)/100. ]],
+#		 'y' => [[ ($RED_PERCENT)/100., ($RED_PERCENT)/100. ]],
 #		 color => { line => 'red' },
 #		 plot => 'line',
 
 		# find min non-zero value
-		my $good_pdl = pdl(@y);
-		my $min_non_zero = $good_pdl->( which( $good_pdl > 0) )->min();
-		my $y = $plot_islog ? $good_pdl + ($min_non_zero/10.) : $good_pdl;
+		my $black_pdl = pdl(@y);
+		my $min_non_zero = $black_pdl->( which( $black_pdl > 0) )->min();
+		my $y = $plot_padlog ? $black_pdl + ($min_non_zero/10.) : $black_pdl;
 		
 		push @plot_array, 
 		'x' => pdl(@x),
@@ -1333,6 +1402,304 @@ sub make_plots{
 		;
 		
 	    }
+
+	if ( $plot =~ /pointhist/){
+
+	    my $top_level_bin_type;
+	    if (defined $plotcfg{bin_over}){
+		$top_level_bin_type = $plotcfg{bin_over};
+	    }
+	    
+	    my $start = $plotcfg{start};
+	    my $stop =  $plotcfg{stop};
+	    my $bin_size =  $plotcfg{bin};
+	    
+	    
+	    my @red;
+	    my @red_m;
+	    my @red_p;
+
+	    my @black;
+	    my @black_m;
+	    my @black_p;
+	    
+	    my @data_bin;
+	    
+	    for ( my $bin = $start; $bin < $stop; $bin += $bin_size ){
+		
+		push @data_bin, $bin;
+		
+		if (defined $plotcfg{black}){
+
+		    my %interval = %report_interval;
+		    if (defined $plotcfg{interval}){
+			if ( $plotcfg{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+		    if (defined $plotcfg{black}->{interval}){
+			if ($plotcfg{black}->{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+
+		    my $bin_type = (defined $plotcfg{black}->{bin_over}) ? $plotcfg{black}->{bin_over} : $top_level_bin_type;
+		    
+		    my %where = (defined $plotcfg{black}->{where} ) ? %{$plotcfg{black}->{where}} : ();
+		    my %time_where;
+
+		    if ("$time_start_field" eq "$time_stop_field"){
+			%time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								 '<=' => $interval{tstop} } );
+		    }
+		    else{
+			%time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					 "$time_stop_field"  => { '<=' => $interval{tstop} },
+					 );
+		    }
+
+		    my $black_select = Ska::SQL::Select->new({ table => $table,
+							      fields => $plotcfg{black}->{fields},
+							       where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+									  %where,
+									  %time_where,
+								      },						
+							   });
+		    
+#		    print $black_select->get_select_string(), "\n";
+		    my $black_ref = $black_select->run({ handle => $handle, type => 'array' });
+		    
+		    if (defined $plotcfg{black_all}){
+			my %all_interval = %report_interval;
+			if (defined $plotcfg{interval}){
+			    if ( $plotcfg{interval} eq 'mission'){
+				%all_interval = %mission_interval;
+			    }
+			}
+			if (defined $plotcfg{black}->{interval}){
+			    if ($plotcfg{black}->{interval} eq 'mission'){
+				%all_interval = %mission_interval;
+			    }
+			}
+			
+			
+			$bin_type = (defined $plotcfg{black_all}->{bin_over}) ? $plotcfg{black_all}->{bin_over} : $top_level_bin_type;
+			
+			%where = (defined $plotcfg{black_all}->{where} ) ? %{$plotcfg{black_all}->{where}} : ();
+			
+
+			if ("$time_start_field" eq "$time_stop_field"){
+			    %time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								     '<=' => $interval{tstop} } );
+			}
+			else{
+			    %time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					     "$time_stop_field"  => { '<=' => $interval{tstop} },
+					     );
+			}
+
+			my $black_all_select = Ska::SQL::Select->new({ table => $table,
+								       fields => $plotcfg{black_all}->{fields},
+								       where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+										  %where,
+										  %time_where,
+									      },						
+								   });
+		    
+#		    print $black_select->get_select_string(), "\n";
+			my $black_allref = $black_all_select->run({ handle => $handle, type => 'array' });
+
+			my $black_cnt = $black_ref->[0]->{black};
+			my $black_all_cnt = $black_allref->[0]->{black_all};
+
+			my $ratio = ( $black_all_cnt > 0 ) ? $black_cnt/$black_all_cnt : 0;
+			my $err_low_lim = ($black_all_cnt > 0) ? ((sqrt($black_cnt)/$black_all_cnt) * 1) : 0;
+			push @black_m, -($err_low_lim);
+        # set the upper limit on the error bar to 100% (by setting the size of the bar to 100-value if
+        # the bar is going to end up over 100)
+			my $err_high_lim = ($err_low_lim + $ratio) < 1 ? $err_low_lim : 1 - $ratio;
+			push @black_p, $err_high_lim;
+			push @black, $ratio;
+#			print "black is $ratio \n";
+
+		    }
+		    else{
+			push @black, $black_ref->[0]->{black};
+			push @black_m, 0;
+			push @black_p, 0;
+		    }
+#		    print "$bin black ", $black_ref->[0]->{black}, "\n";
+
+		}
+		if (defined $plotcfg{red}){
+		    my %interval = %report_interval;
+		    if (defined $plotcfg{interval}){
+			if ( $plotcfg{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+		    if (defined $plotcfg{red}->{interval}){
+			if ($plotcfg{red}->{interval} eq 'mission'){
+			    %interval = %mission_interval;
+			}
+		    }
+
+
+		    my $bin_type = (defined $plotcfg{red}->{bin_over}) ? $plotcfg{red}->{bin_over} : $top_level_bin_type;
+		    my %where = (defined $plotcfg{red}->{where} ) ? %{$plotcfg{red}->{where}} : ();
+		    my %time_where;
+		    if ("$time_start_field" eq "$time_stop_field"){
+			%time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								 '<=' => $interval{tstop} } );
+		    }
+		    else{
+			%time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					 "$time_stop_field"  => { '<=' => $interval{tstop} },
+					 );
+		    }
+
+
+		    my $red_select = Ska::SQL::Select->new({ table => $table,
+							     fields => $plotcfg{red}->{fields},
+							     where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+									%where,
+									%time_where,
+									
+								    },						
+							 });
+		    
+#		    print Dumper $red_select;
+		    my $red_ref = $red_select->run({ handle => $handle, type => 'array' });
+		    my $red_scale = ( defined $plotcfg{red}->{scale} ) ? $plotcfg{red}->{scale} : 1;
+		
+		
+		    if (defined $plotcfg{red_all}){
+			my %all_interval = %report_interval;
+			if (defined $plotcfg{interval}){
+			    if ( $plotcfg{interval} eq 'mission'){
+				%all_interval = %mission_interval;
+			    }
+			}
+			if (defined $plotcfg{black}->{interval}){
+			    if ($plotcfg{black}->{interval} eq 'mission'){
+				%all_interval = %mission_interval;
+			    }
+			}
+			
+			
+			$bin_type = (defined $plotcfg{red_all}->{bin_over}) ? $plotcfg{red_all}->{bin_over} : $top_level_bin_type;
+			
+			%where = (defined $plotcfg{red_all}->{where} ) ? %{$plotcfg{red_all}->{where}} : ();
+			
+
+			if ("$time_start_field" eq "$time_stop_field"){
+			    %time_where = ( "$time_start_field" => { '>=' => $interval{tstart} ,
+								     '<=' => $interval{tstop} } );
+			}
+			else{
+			    %time_where = (  "$time_start_field" => { '>=' => $interval{tstart} },
+					     "$time_stop_field"  => { '<=' => $interval{tstop} },
+					     );
+			}
+
+			my $red_all_select = Ska::SQL::Select->new({ table => $table,
+								       fields => $plotcfg{red_all}->{fields},
+								       where => { $bin_type => { '>=' => $bin, '<' => $bin + $bin_size },
+										  %where,
+										  %time_where,
+									      },						
+								   });
+		    
+#		    print $black_select->get_select_string(), "\n";
+			my $red_allref = $red_all_select->run({ handle => $handle, type => 'array' });
+
+			my $red_cnt = $red_ref->[0]->{red};
+			my $red_all_cnt = $red_allref->[0]->{red_all};
+
+			my $ratio = ( $red_all_cnt > 0 ) ? $red_cnt/$red_all_cnt : 0;
+			my $err_low_lim = ($red_all_cnt > 0) ? ((sqrt($red_cnt)/$red_all_cnt) * 1) : 0;
+			push @red_m, -($err_low_lim);
+        # set the upper limit on the error bar to 100% (by setting the size of the bar to 100-value if
+        # the bar is going to end up over 1)
+			my $err_high_lim = ($err_low_lim + $ratio) < 1 ? $err_low_lim : 1 - $ratio;
+			push @red_p, $err_high_lim;
+			push @red, $ratio;
+		    }
+		    else{
+			push @red, $red_ref->[0]->{red} * $red_scale ;
+			push @red_m, 0;
+			push @red_p, 0;
+		    }
+		}
+
+#			print "$bin red ", $red_ref->[0]->{red}, "\n";
+	    }
+		
+	    
+	   
+
+#	    print Dumper @data_bin;
+#	    print Dumper @black;
+#	    print Dumper @red_x100;
+
+
+	    # find min non-zero value
+	    if (scalar(@black)){
+		my $black_pdl = pdl(@black);
+#		print $black_pdl, "\n";
+		my $min_non_zero = $black_pdl->( which( $black_pdl > 0) )->min();
+		my $y_black =  $plot_padlog ? $black_pdl + ($min_non_zero/10.) : $black_pdl;
+		
+		push @plot_array,   
+		'x' => pdl(@data_bin),
+		'y' => $y_black;
+		
+		if (scalar(@black_m) and scalar(@black_p)){
+		   push @plot_array, 
+		   'y_m' => pdl(@black_m),
+		   'y_p' => pdl(@black_p),
+		   ;
+	       }
+		push @plot_array,
+		options => {center => 1},
+		charsize => {symbol => 1.2,
+			     title => 2.0,
+			     axis => 2.0,
+			 },
+		plot => 'points',
+		;
+		
+		if (scalar(@red)){
+		    my $red_pdl = pdl(@red);
+		    my $y_red = $plot_padlog ? $red_pdl + ($min_non_zero/10.) : $red_pdl;
+		    
+		    
+		    push @plot_array,
+		    'x' => pdl(@data_bin)+0.01,
+		    'y' => $y_red,
+		    ;
+		    if (scalar(@red_m) and scalar(@red_p)){
+			push @plot_array, 
+			'y_m' => pdl(@red_m),
+			'y_p' => pdl(@red_p),
+			;
+		    }
+		    push @plot_array,
+		    options => {center => 1},
+		    charsize => {symbol => 1.2,
+				 title => 2.0,
+				 axis => 2.0,
+			     },
+		    color => { symbol => 'red', err => 'red' },
+		    plot => 'points',
+		    ;
+		    
+		}
+	    }
+
+	    
+
+	}
 	    
 
 	    
@@ -1362,15 +1729,34 @@ sub make_plots{
 		unlink "$psfile";
 		
 	    }
-	}	
 	
-}
+
+	}
+    
+	
+}			 
 
 
 
 1;
 
 
+=pod 
+
+=head1 AUTHOR
+
+Jean Connelly, E<lt>jeanconn@localdomainE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2008 by Smithsonian Astrophysical Observatory
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.0 or,
+at your option, any later version of Perl 5 you may have available.
+
+
+=cut
 
 
 

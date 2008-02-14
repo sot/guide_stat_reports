@@ -13,7 +13,7 @@ templates:
    index_file: all_plot_report.html
    predefined_index_file: standard_report.html
    #report_file: gs_report.txt
-   report_yaml_file: acq_report.yml
+   report_yaml_file: gui_report.yml
 
 
 db:
@@ -21,29 +21,31 @@ db:
    table: guide_stats_view
    time_start_field: kalman_tstart
    time_stop_field: kalman_tstop
-   table: guide_stats_view
 
 data:
 
    count_field: "count(id)"
 
    rates:
-      - rate: bad_track 
+      - name: bad_track 
         value: 5
         field: percent_not_tracking 
         operator: '>='
-      - rate: fail_track
+      - name: fail_track
         value: 100
         field: percent_not_tracking
         operator: '='
-      - rate: obc_bad_status
+      - name: obc_bad_status
         value: 5
         field: percent_obc_bad_status
         operator: '>='
 
    loops:
-      - bin_over: mag
-        get: rates
+      - bin_over: mag_exp
+        get:
+           - rate: bad_track
+           - rate: fail_track
+           - rate: obc_bad_status
         start: 10.0
         stop: 10.8
         bin: .1
@@ -93,14 +95,16 @@ data:
          - 'mag_exp as mag'
          - 'mag_obs_mean as mag_obs'
          - 'percent_not_tracking as bad_track'
+         - 'percent_obc_bad_status as bad_status'
       field_fmt:
          - %12s
          - %5s
          - %5.2f
          - %5.2f
          - %5.2f
+         - %5.2f
       order:
-         - tstart
+         - kalman_tstart
 
 
 
@@ -260,7 +264,7 @@ plots:
       where:
          percent_not_tracking:
             '<' : 100
-      plot_name: delt_mag_scatter.gif
+      plot_name: delta_mag_scatter.gif
       pgs_plot:
          - lims:
             - 5
@@ -271,6 +275,26 @@ plots:
          - xtitle: 'AGASC magnitude (mag)'
          - ytitle: 'Observed - AGASC mag'
          - logy: 0
+
+
+   delta_color_scatter:
+      x: color
+      y: mag_exp-mag_obs_mean
+      where:
+         percent_not_tracking:
+            '<' : 100
+      plot_name: delta_color_scatter.gif
+      pgs_plot:
+         - lims:
+            - -.5
+            - 2.0
+            - ~
+            - ~
+         - toptitle: "Delta Mag vs Color"
+         - xtitle: 'AGASC color (B-V)'
+         - ytitle: 'Observed - AGASC mag'
+         - logy: 0
+
 
 
 
