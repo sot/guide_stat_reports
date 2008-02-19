@@ -143,7 +143,7 @@ for my $idx (0 ... $#dirs){
     }
     else{
 	$table .= qq{ <TR><TD>$idx</TD><TD>$dirabbrev</TD> };
-	print "No data for $dirname \n";
+#	print "No data for $dirname \n";
 	push @{$plots{bad_track_rate}}, undef;
 	push @{$plots{mission_bad_track_rate}}, undef;
 	push @{$plots{obc_bad_status_rate}}, undef;
