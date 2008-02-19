@@ -114,7 +114,7 @@ if ( defined $opt{predefined} ){
 
     
 if (defined $opt{update}){
-    my @intervals = qw( month quarter year );
+    my @intervals = qw( month quarter semi year );
     for my $type (@intervals){
 	my $interval = Ska::Report::TimeRange->new( $type, { out_fmt => 'datetie'} )->find_prev();
 	my $range_ref = $interval->range();
@@ -255,9 +255,9 @@ sub run_predefined{
     run_report({ config => \%config, opt => \%opt });    
     use Ska::Run;
     unless (defined $opt{no_summary}){
-	run("${SHARE}/make_summary.pl -${type}", loud => 1);
+	run("${SHARE}/make_summary.pl -${type}");
     }
-    run("${SHARE}/make_toc.pl", loud => 1);
+    run("${SHARE}/make_toc.pl");
 
 }
 
