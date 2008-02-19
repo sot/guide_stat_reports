@@ -76,7 +76,7 @@ my %opt = ( calc_rate_tstart => Ska::Report::TimeRange::datetie_to_fits_format($
 	    calc_rate_tstop => Ska::Report::TimeRange::datetie_to_fits_format($now_time),
 	    tstart => Ska::Report::TimeRange::datetie_to_fits_format($month_back_time),
 	    tstop => Ska::Report::TimeRange::datetie_to_fits_format($now_time),
-	    
+	    print_web => 1
 	    );
 
 # retrieve tool requested times
@@ -168,7 +168,7 @@ sub run_predefined{
     my %config = %{$arg_in->{config}};
     my %opt = %{$arg_in->{opt}};
 
-    print "Updating ", $opt{predefined}, "\n";
+    print "Updating ", $opt{predefined}, " ";
 
     my $month_start;
     my $month_end;
