@@ -25,6 +25,9 @@ db:
 data:
 
    count_field: "count(id)"
+   where: 
+      type: 
+         '!=': 'FID' 
 
    rates:
       - name: bad_track 
@@ -148,12 +151,18 @@ plots:
          where:
             percent_not_tracking:
                '<=' : 5
+            type: 
+               '!=': 'FID' 
+
       red:
          fields: 
             - "count(id) as red"
          where:
             percent_not_tracking:
                '>' : 5
+         type: 
+            '!=': 'FID' 
+
          scale: 100
       pgs_plot:
          - toptitle: "N good (black) and bad (red) stars vs Mag" 
@@ -179,12 +188,18 @@ plots:
          where:
             percent_not_tracking:
                '<=' : 5
+            type: 
+               '!=': 'FID' 
+
       red:
          fields: 
             - "count(id) as red"
          where:
             percent_not_tracking:
                '>' : 5
+            type: 
+               '!=': 'FID' 
+
          scale: 100
       pgs_plot:
          - toptitle: "N good (black) and bad (red) stars vs Mag" 
@@ -210,10 +225,17 @@ plots:
          fields:
             - "count(id) as black"
          scale: fraction
+         where:
+            type: 
+               '!=': 'FID' 
+
       red:
          interval: mission
          fields: 
             - "count(id) as red"
+         where:
+            type: 
+               '!=': 'FID' 
          scale: fraction
       pgs_plot:
          - toptitle: "Expected Magnitudes of Guide Stars" 
@@ -239,12 +261,17 @@ plots:
          where:
             percent_not_tracking:
                '<=' : 5
+            type: 
+               '!=': 'FID' 
       red:
          fields: 
             - "count(id) as red"
          where:
             percent_not_tracking:
                '>' : 5
+            type: 
+               '!=': 'FID' 
+
          scale: 100
       pgs_plot:
          - toptitle: "N good (black) and bad (red) stars vs Color"
@@ -264,6 +291,9 @@ plots:
       where:
          percent_not_tracking:
             '<' : 100
+         type: 
+            '!=': 'FID' 
+
       plot_name: delta_mag_scatter.gif
       pgs_plot:
          - lims:
@@ -283,6 +313,9 @@ plots:
       where:
          percent_not_tracking:
             '<' : 100
+         type: 
+            '!=': 'FID' 
+
       plot_name: delta_color_scatter.gif
       pgs_plot:
          - lims:
@@ -305,6 +338,10 @@ plots:
       x: mag_exp
       y: (percent_not_tracking/100)
       plot_name: tracking_scatter.gif
+      where:
+         type: 
+            '!=': 'FID' 
+
       pgs_plot:
          - logy: 1
          - lims:
@@ -332,6 +369,10 @@ plots:
       x: mag_exp
       y: (percent_not_tracking/100)+(percent_bad_status/100)
       plot_name: status_scatter.gif  
+      where:
+         type: 
+            '!=': 'FID' 
+
       pgs_plot:
          - lims:
             - 5
