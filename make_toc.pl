@@ -48,14 +48,15 @@ my %monthname =  ( M01 => 'Jan',
 		   );
 
 
-my $task = 'guide_stat_reports';
+my $task = 'gui_stat_reports';
 my $SKA = $ENV{SKA} || '/proj/sot/ska';
 my $SHARE = "${SKA}/share/${task}";
 my $WEBDATA = "${SKA}/www/ASPECT/${task}";
-my $SKADATA = "${SKA}/data/${task}";
+my $SKADATA = $WEBDATA;
+#my $SKADATA = "${SKA}/data/${task}";
 
 #my $datafile = 'gs_report.yml';
-my $webprefix = "http://cxc.harvard.edu/mta/ASPECT/${task}";
+my $webprefix = "/mta/ASPECT/${task}";
 my $indexfile = 'index.html';
 
 my %exist_dirs;
@@ -66,33 +67,32 @@ push @{$exist_dirs{semi}}, map { $_ =~ s/${SKADATA}\///; $_ } glob("${SKADATA}/?
 push @{$exist_dirs{year_dir}}, map { $_ =~ s/${SKADATA}\///; $_ } glob("${SKADATA}/????");
 push @{$exist_dirs{year}}, map { $_ =~ s/${SKADATA}\///; $_ } glob("${SKADATA}/????/YEAR/");
 
-
-
+#use Data::Dumper;
 #print Dumper %exist_dirs;
 
 my $toc;
 
-$toc .= qq{ <HTML><HEAD><TITLE>Guide Star Statistics Reports</TITLE> \n} ;
+$toc .= qq{ <HTML><HEAD><TITLE>Tracking Statistics Reports</TITLE> \n} ;
 $toc .= qq{ <link href="/mta/ASPECT/aspect.css" rel="stylesheet" type="text/css" media="all" /> \n};
 $toc .= qq{    <style type="text/css"> \n };
-$toc .= qq{ body { min-width:900px; background:url('http://asc.harvard.edu/mta/ASPECT/blue_paper.gif'); \n  }};
+$toc .= qq{ body { min-width:900px; background:url('http://cxc.harvard.edu/mta/ASPECT/blue_paper.gif'); \n  }};
 $toc .= qq{    </style> \n };
 $toc .= qq{ </HEAD><BODY> };
-$toc .= qq{ <H3>Guide Star Statistics Reports</H3> \n };
+$toc .= qq{ <H3>Tracking Statistics Reports</H3> \n };
 
 
-$toc .= qq{ <H4>Summary Reports</H4> };
-$toc .= qq{ <TABLE BORDER=1><TR> };
-for my $type qw( Year Semi Quarter Month ){
-    my $lctype = lc($type);
-    $toc .= qq{ <TD><A HREF="${webprefix}/${lctype}_summary">By $type</A></TD> }
-}
-$toc .= qq{ </TR></TABLE> };
+#$toc .= qq{ <H4>Summary Reports</H4> };
+#$toc .= qq{ <TABLE BORDER=1><TR> };
+#for my $type qw( Year Semi Quarter Month ){
+#    my $lctype = lc($type);
+#    $toc .= qq{ <TD><A HREF="${webprefix}/${lctype}_summary">By $type</A></TD> }
+#}
+#$toc .= qq{ </TR></TABLE> };
 
 
-$toc .= qq{ <H4>Special Reports</H4> };
-$toc .= qq{ <A HREF="${webprefix}/all_mission">Mission</A><BR />\n};
-$toc .= qq{ <A HREF="${webprefix}/mission_since_2003">Mission Since 2003</A><BR />\n};
+#$toc .= qq{ <H4>Special Reports</H4> };
+#$toc .= qq{ <A HREF="${webprefix}/all_mission">Mission</A><BR />\n};
+#$toc .= qq{ <A HREF="${webprefix}/mission_since_2003">Mission Since 2003</A><BR />\n};
 
 $toc .= qq{ </BODY></HTML> };
 

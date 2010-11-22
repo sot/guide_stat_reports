@@ -1,0 +1,119 @@
+<HTML>
+<HEAD>
+<TITLE>Tracking Statistics Report</TITLE>
+<link href="/mta/ASPECT/aspect.css" rel="stylesheet" type="text/css" media="all" />
+  <style type="text/css">
+  body { min-width:900px;
+  background:url('http://asc.harvard.edu/mta/ASPECT/blue_paper.gif');
+  }
+}
+</style>
+</HEAD>
+<BODY>
+<TABLE>
+<TR>
+<TD><A HREF="{{ nav.main }}">UP TO MAIN</A></TD>
+<TD><A HREF="{{ nav.prev }}">PREV</A></TD>
+<TD><A HREF="{{ nav.next }}">NEXT</A></TD>
+</TR>
+</TABLE>
+
+<H2>Guide Stats Report - {{ rep.datestring }}</H2>
+<H3>{{ rep.human_date_start }} through {{ rep.human_date_stop }}</H3>
+
+
+
+<TABLE BORDER=1>
+<TR><TH>TSTART</TH><TH>TSTOP</TH></TR>
+<TR><TD>{{ rep.datestart }}</TD><TD>{{ rep.datestop }}</TD></TR>
+</TABLE>
+
+
+<TABLE BORDER=1>
+<TR><TH colspan=2></TH>
+<TH colspan=6>bad_track</TH>
+<TH colspan=6>fail_track</TH>
+<TH colspan=6>obc_bad_status</TH>
+</TR> 
+<TR><TH></TH><TH></TH>
+<TH colspan=4>stars</TH><TH colspan=2>rate</TH>
+<TH colspan=4>stars</TH><TH colspan=2>rate</TH>
+<TH colspan=4>stars</TH> <TH colspan=2>rate</TH>
+</TR> 
+<TR><TH></TH><TH>n stars</TH>
+<TH>actual</TH><TH>pred.</TH><TH>P Less</TH><TH>P More</TH><TH>actual</TH><TH>pred.</TH>
+<TH>actual</TH><TH>pred.</TH><TH>P Less</TH><TH>P More</TH><TH>actual</TH><TH>pred.</TH>
+<TH>actual</TH><TH>pred.</TH><TH>P Less</TH><TH>P More</TH><TH>actual</TH><TH>pred.</TH>
+</TR> 
+<TR>
+<TD>report</TD><TD>{{ rep.n_stars }}</TD>
+{% for t in rep.fail_types %}
+{% if t.n_stars > 0 %}
+<TD><A HREF="{{ t.fail_url }}">{{ t.n_stars }}</A></TD>
+{% else %}
+<TD>{{ t.n_stars }}</TD>
+{% endif %}
+<TD>{{"%.1f"|format(t.n_stars_pred) }}</TD>
+<TD>{{ "%.2f"|format(t.p_less)}}</TD><TD>{{"%.2f"|format(t.p_more)}}</TD>
+<TD>{{ "%.3f"|format(t.rate)}}</TD><TD>{{"%.3f"|format(t.rate_pred)}}</TD>
+{% endfor %}
+</TR>
+</TABLE>
+
+<TABLE>
+<TR><TD><img src="mag_histogram.png"></TD><TD><img src="color_histogram.png"></TD></TR>
+<TR><TD><img src="delta_mag_vs_mag.png"></TD><TD><img src="delta_mag_vs_color.png"></TD></TR>
+<TR><TD><img src="frac_not_track_vs_mag.png"></TD><TD><img src="frac_not_track_plus_status.png"></TD></TR>
+</TABLE>
+
+<TABLE BORDER=1>
+<TR><TH colspan=2></TH>
+<TH colspan=2>bad_track</TH>
+<TH colspan=2>no_track</TH>
+<TH colspan=2>obc_bad_status</TH>
+</TR> 
+<TR><TH></TH>
+<TH>N Stars</TH>
+<TH colspan=1>stars</TH>
+<TH colspan=1>rate</TH>
+<TH colspan=1>stars</TH>
+<TH colspan=1>rate</TH>
+<TH colspan=1>stars</TH>
+<TH colspan=1>rate</TH>
+</TR>
+{% for m in by_mag %}
+<TR>
+<TD>{{ m.mag_start }} - {{ m.mag_stop }}</TD>
+<TD>{{ m.n_stars }}</TD>
+
+{% if m.bad_trak_n_stars > 0 %}
+<TD><A HREF="{{ m.bad_trak_fail_url }}">{{ m.bad_trak_n_stars }}</A></TD>
+{% else %}
+<TD>{{ m.bad_trak_n_stars }}</TD>
+{% endif %}
+<TD>{{"%.3f"|format(m.bad_trak_rate)}}</TD>
+
+{% if m.no_trak_n_stars > 0 %}
+<TD><A HREF="{{ m.no_trak_fail_url }}">{{ m.no_trak_n_stars }}</A></TD>
+{% else %}
+<TD>{{ m.no_trak_n_stars }}</TD>
+{% endif %}
+<TD>{{"%.3f"|format(m.no_trak_rate)}}</TD>
+
+{% if m.obc_bad_n_stars > 0 %}
+<TD><A HREF="{{ m.obc_bad_fail_url }}">{{ m.obc_bad_n_stars }}</A></TD>
+{% else %}
+<TD>{{ m.obc_bad_n_stars }}</TD>
+{% endif %}
+<TD>{{"%.3f"|format(m.obc_bad_rate)}}</TD>
+
+</TR>
+{% endfor %}
+</TABLE>
+
+
+</BODY>
+</HTML>
+
+
+      
