@@ -21,7 +21,7 @@ import Ska.DBI
 from Chandra.Time import DateTime
 import Ska.Matplotlib
 import Ska.report_ranges
-
+from star_error import high_low_rate
 
 task = 'gui_stat_reports'
 TASK_SHARE = os.path.join(os.environ['SKA'],'share', task)
@@ -33,6 +33,7 @@ jinja_env = jinja2.Environment(
 logger = logging.getLogger(task)
 logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(message)s')
+
 
 def get_options():
     from optparse import OptionParser
@@ -91,7 +92,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     range_guis = guis[ (guis['kalman_tstart'] >= tstart) & (guis['kalman_tstart'] < tstop ) ]
 
     # Scaled Failure Histogram, full mag range
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     mag_bin = .1
     good = range_guis[range_guis['not_tracking_samples']*1.0/(range_guis['n_samples']) <= bad_thresh]
     # use unfilled histograms from a scipy example
@@ -110,9 +111,10 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('N good (black) and bad (red) stars vs Mag')
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'mag_histogram.png'))
+    plt.close(h)
 
     # Scaled Failure Histogram vs Color
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     color_bin = .1
     # use unfilled histograms from a scipy example
     (bins, data) = Ska.Matplotlib.hist_outline(good['color'],
@@ -130,10 +132,10 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('N good (black) and bad (red) stars vs Color')
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'color_histogram.png'))
-
+    plt.close(h)
 
     # Delta Mag vs Mag
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     tracked = range_guis[range_guis['not_tracking_samples']
 			 < range_guis['n_samples']]
     plt.plot(tracked['mag_exp'], tracked['aoacmag_mean']
@@ -143,9 +145,10 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('Delta Mag vs Mag')
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_mag.png'))
+    plt.close(h)
 
     # Delta Mag vs Color
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     plt.plot(tracked['color'], tracked['aoacmag_mean']
     	     -tracked['mag_exp'], 'k.')
     plt.xlabel('Color (B-V)')
@@ -153,10 +156,10 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('Delta Mag vs Color')
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_color.png'))
-
+    plt.close(h)
 
     # Fraction not tracking vs Mag
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     trak_frac = (range_guis['not_tracking_samples']*1.0/
 		 range_guis['n_samples'])
     plt.semilogy(range_guis['mag_exp'], trak_frac, 'k.')
@@ -166,9 +169,10 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylim(1e-5, 1.1)
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'frac_not_track_vs_mag.png'))
+    plt.close(h)
 
     # Fraction not tracking plus bad status vs Mag
-    plt.figure(figsize=figsize)
+    h=plt.figure(figsize=figsize)
     trak_frac = ((range_guis['not_tracking_samples']
 		  + range_guis['obc_bad_status_samples'])*1.0
 		 / range_guis['n_samples'])
@@ -179,7 +183,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylim(1e-5, 1.1)
     plt.subplots_adjust(top=.85, bottom=.17, right=.97)
     plt.savefig(os.path.join(outdir, 'frac_not_track_plus_status.png'))
-
+    plt.close(h)
 
 
 def make_html( nav_dict, rep_dict, pred_dict, outdir):
@@ -222,16 +226,17 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
     """
 	
     rep = { 'datestring' : tname,
-	    'datestart' : DateTime(mxdatestart).date,
-	    'datestop' : DateTime(mxdatestop).date,
-	    'human_date_start' : mxdatestart.strftime("%d-%B-%Y"),
-	    'human_date_stop' : mxdatestop.strftime("%d-%B-%Y"),
+            'datestart' : DateTime(mxdatestart).date,
+            'datestop' : DateTime(mxdatestop).date,
+            'human_date_start' : mxdatestart.strftime("%d-%B-%Y"),
+            'human_date_stop' : mxdatestop.strftime("%d-%B-%Y"),
 	    }
 
     rep['n_stars'] = len(stars)
     rep['fail_types'] = []
     if not len(stars):
         raise NoStarError("No acq stars in range")
+
 
     fail_stars = dict(bad_trak = stars[
 	    stars['not_tracking_samples']*1.0/stars['n_samples']
@@ -245,15 +250,18 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
 
     fail_types = ['bad_trak', 'no_trak', 'obc_bad']
     for ftype in fail_types:
-	trep={}
-	trep['n_stars'] = len(fail_stars[ftype])
-	trep['rate'] = len(fail_stars[ftype])*1.0/rep['n_stars']
-	trep['n_stars_pred'] = predictions['%s_rate' % ftype ]*rep['n_stars']
-	trep['rate_pred'] = predictions['%s_rate' % ftype]
-	trep['p_less'] = scipy.stats.poisson.cdf(
+        trep={}
+        trep['type']=ftype
+        trep['n_stars'] = len(fail_stars[ftype])
+        trep['rate'] = len(fail_stars[ftype])*1.0/rep['n_stars']
+        trep['rate_err_high'], trep['rate_err_low'] = high_low_rate(trep['n_stars'],rep['n_stars'])
+        
+        trep['n_stars_pred'] = predictions['%s_rate' % ftype ]*rep['n_stars']
+        trep['rate_pred'] = predictions['%s_rate' % ftype]
+        trep['p_less'] = scipy.stats.poisson.cdf(
 		    trep['n_stars'], trep['n_stars_pred'])
-	trep['p_more'] = scipy.stats.poisson.cdf(
-		trep['n_stars'] - 1, trep['n_stars_pred'])
+        trep['p_more'] = scipy.stats.poisson.cdf(
+            trep['n_stars'] - 1, trep['n_stars_pred'])
 
 
         flat_fails = [dict(id=star['id'],
@@ -264,12 +272,12 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
                                       /star['n_samples']),
                            obc_bad_status=(star['obc_bad_status_samples']*1.0
                                            /star['n_samples']),
-			   color=star['color'])
+                           color=star['color'])
                       for star in fail_stars[ftype]]
         outfile = os.path.join(outdir, "%s_stars_list.html" % ftype)
         trep['fail_url'] = "%s_stars_list.html" % ftype
         rep['fail_types'].append(trep)
-	make_fail_html(flat_fails, outfile)
+        make_fail_html(flat_fails, outfile)
 
     rep['by_mag'] = []
     # looping first over mag and then over fail type for a better
@@ -328,14 +336,11 @@ def main(opt):
     from 2003:001 to the end of the interval.
     """
     
-    sqlaca = Ska.DBI.DBI(dbi='sybase', server='sybase', numpy=True)
+    sqlaca = Ska.DBI.DBI(dbi='sybase', server='sybase', user='aca_read', database='aca', numpy=True)
     min_time = DateTime('2003:001:00:00:00.000')
 
     data_table = 'trak_stats_data'
 
-    predictions = dict(bad_trak_rate=0.007,
-		       no_trak_rate=0.001,
-		       obc_bad_rate=0.056)
 
     # use the acq_stats_id_by_obsid view for a quick count of the number of ID/NOID
     # stars in each obsid.  Used by make_id_plots()
@@ -343,6 +348,7 @@ def main(opt):
     #                         min_acq_time.secs )
 
     to_update = Ska.report_ranges.get_update_ranges(opt.days_back)
+
 
     for tname in sorted(to_update.keys()):
         logger.debug("Attempting to update %s" % tname )
@@ -366,53 +372,65 @@ def main(opt):
 
         try:
 
-	    stars = sqlaca.fetchall("""select * from %s
-	                                 where kalman_tstart >= %f
-					 and kalman_tstop <= %f
-					 and type != 'FID'
-					 and color is not NULL
-					 """
-					% (data_table,
-					   DateTime(mxdatestart).secs,
-					   DateTime(mxdatestop).secs))
+            stars = sqlaca.fetchall("""select * from %s
+            where kalman_tstart >= %f
+            and kalman_tstop <= %f
+            and type != 'FID'
+            and color is not NULL
+            """
+                                    % (data_table,
+                                       DateTime(mxdatestart).secs,
+                                       DateTime(mxdatestop).secs))
 
 
-		    
+
+
+            import json
+            pred = dict(obc_bad=json.load(open('obc_bad_fitfile.json')),
+                        bad_trak=json.load(open('bad_trak_fitfile.json')),
+                        no_trak=json.load(open('no_trak_fitfile.json')),
+                        )  
+
+            half_mxd = mxdatestart + ((mxdatestop-mxdatestart)/2)
+            half_frac_year = half_mxd.year + half_mxd.day_of_year / 365.25
+            predictions = dict([(ftype + '_rate',pred[ftype]['m']
+                            * (half_frac_year - pred[ftype]['time0'])
+                            + pred[ftype]['b'])
+                           for ftype in pred
+                           ])
+
+
             rep = star_info(stars, predictions, opt.bad_thresh, opt.obc_bad_thresh,
-	    		    tname, mxdatestart, mxdatestop, webout)
+                            tname, mxdatestart, mxdatestop, webout)
 
-	    import json
+            import json
             rep_file = open(os.path.join(dataout, 'rep.json'), 'w')
-	    rep_file.write(json.dumps(rep, sort_keys=True, indent=4))
-	    rep_file.close()
+            rep_file.write(json.dumps(rep, sort_keys=True, indent=4))
+            rep_file.close()
 
-	    prev_range = Ska.report_ranges.get_prev(to_update[tname])
-	    next_range = Ska.report_ranges.get_next(to_update[tname])
-	    nav = dict(main=opt.url,
-	    	       next="%s/%s/%s/%s" % (opt.url,
-	    				     next_range['year'],
-	    				     next_range['subid'],
-	    				     'index.html'),
-	    	       prev="%s/%s/%s/%s" % (opt.url,
-	    				     prev_range['year'],
-	    				     prev_range['subid'],
-	    				     'index.html'),
-	    	       )
-	    make_gui_plots( stars,
-			    opt.bad_thresh,
-			    tstart=DateTime(mxdatestart).secs,
-			    tstop=DateTime(mxdatestop).secs,
-			    outdir=webout)
-	    #make_id_plots( all_id_upto,
-	    #		   tstart=DateTime(mxdatestart).secs,
-	    #		   tstop=DateTime(mxdatestop).secs,
-	    #		   outdir=out)
-	    #
-	    make_html(nav, rep, predictions, outdir=webout)
+
+            prev_range = Ska.report_ranges.get_prev(to_update[tname])
+            next_range = Ska.report_ranges.get_next(to_update[tname])
+            nav = dict(main=opt.url,
+                       next="%s/%s/%s/%s" % (opt.url,
+                                             next_range['year'],
+                                             next_range['subid'],
+                                             'index.html'),
+                       prev="%s/%s/%s/%s" % (opt.url,
+                                             prev_range['year'],
+                                             prev_range['subid'],
+                                             'index.html'),
+                       )
+            make_gui_plots( stars,
+                        opt.bad_thresh,
+                        tstart=DateTime(mxdatestart).secs,
+                        tstop=DateTime(mxdatestop).secs,
+                        outdir=webout)
+            make_html(nav, rep, predictions, outdir=webout)
         except NoStarError:
-	    print "ERROR: Unable to process %s" % tname
-	    os.rmdir(webout)
-	    os.rmdir(dataout)
+            print "ERROR: Unable to process %s" % tname
+            os.rmdir(webout)
+            os.rmdir(dataout)
 	
 
 
