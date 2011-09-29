@@ -81,7 +81,8 @@ $toc .= qq{ </HEAD><BODY> };
 $toc .= qq{ <H3>Tracking Statistics Reports</H3> \n };
 
 
-#$toc .= qq{ <H4>Summary Reports</H4> };
+$toc .= qq{ <H4>Summary Reports</H4> };
+$toc .= qq{ <A HREF="./summary/guide_summary.html">Summary Index</A>};
 #$toc .= qq{ <TABLE BORDER=1><TR> };
 #for my $type qw( Year Semi Quarter Month ){
 #    my $lctype = lc($type);
@@ -94,7 +95,7 @@ $toc .= qq{ <H3>Tracking Statistics Reports</H3> \n };
 #$toc .= qq{ <A HREF="${webprefix}/all_mission">Mission</A><BR />\n};
 #$toc .= qq{ <A HREF="${webprefix}/mission_since_2003">Mission Since 2003</A><BR />\n};
 
-$toc .= qq{ </BODY></HTML> };
+
 
 
 $toc .= qq{ <H4>Individual Reports</H4> \n};
@@ -147,7 +148,7 @@ for my $typestring qw( Month Quarter Semi Year ){
 }
 
 
-
+$toc .= qq{ </BODY></HTML> };
 
 
 my $outfile = "index.html";
