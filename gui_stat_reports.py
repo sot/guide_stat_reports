@@ -238,15 +238,12 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
         raise NoStarError("No acq stars in range")
 
 
-    fail_stars = dict(bad_trak = stars[
-	    stars['not_tracking_samples']*1.0/stars['n_samples']
-	    > bad_thresh ],
-			obc_bad = stars[
-	    stars['obc_bad_status_samples']*1.0/stars['n_samples']
-	    > obc_bad_thresh ],
-			no_trak = stars[
-	    stars['not_tracking_samples'] == stars['n_samples']
-	    ])
+    fail_stars = dict(bad_trak = stars[stars['not_tracking_samples']*1.0/stars['n_samples']
+                                       > bad_thresh ],
+                      obc_bad = stars[stars['obc_bad_status_samples']*1.0/stars['n_samples']
+                                      > obc_bad_thresh ],
+                      no_trak = stars[stars['not_tracking_samples'] == stars['n_samples']
+        ])
 
     fail_types = ['bad_trak', 'no_trak', 'obc_bad']
     for ftype in fail_types:
@@ -374,7 +371,7 @@ def main(opt):
 
             stars = sqlaca.fetchall("""select * from %s
             where kalman_tstart >= %f
-            and kalman_tstop <= %f
+            and kalman_tstart < %f
             and type != 'FID'
             and color is not NULL
             """
@@ -391,15 +388,21 @@ def main(opt):
                         no_trak=json.load(open('no_trak_fitfile.json')),
                         )  
 
+            old_pred = dict(obc_bad=0.07,
+                            bad_trak=0.005,
+                            no_trak=0.001)
+
+
             half_mxd = mxdatestart + ((mxdatestop-mxdatestart)/2)
             half_frac_year = half_mxd.year + half_mxd.day_of_year / 365.25
-            predictions = dict([(ftype + '_rate',pred[ftype]['m']
-                            * (half_frac_year - pred[ftype]['time0'])
-                            + pred[ftype]['b'])
-                           for ftype in pred
-                           ])
-
-
+            predictions = {}
+            for ftype in pred:
+                if half_frac_year >= pred[ftype]['time0']:
+                    predictions[ftype + '_rate'] = (
+                        pred[ftype]['m'] * (half_frac_year - pred[ftype]['time0']) + pred[ftype]['b'])
+                else:
+                    predictions[ftype + '_rate'] = old_pred[ftype]
+            
             rep = star_info(stars, predictions, opt.bad_thresh, opt.obc_bad_thresh,
                             tname, mxdatestart, mxdatestop, webout)
 
