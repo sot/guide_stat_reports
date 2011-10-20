@@ -21,21 +21,25 @@ import sherpa.ui as ui
 
 import Ska.DBI
 
-trend_date_start = '2006:292:00:00:00.000'
+#trend_date_start = '2006:292:00:00:00.000'
+trend_date_start = '2008:001:00:00:00.000'
+#trend_date_start = '2011:246:15:41:04.973'
 trend_start = DateTime(trend_date_start).secs
 trend_date_stop = DateTime().date
 trend_stop = DateTime().secs
 #trend_stop = DateTime("2011:050:00:00:00.000").secs
-csec_year = 86400 * 365.25
+#csec_year = 86400 * 365.25
 
 dbh = Ska.DBI.DBI(dbi='sybase', server='sybase', user='aca_read', database='aca')
-stars = dbh.fetchall("""select kalman_tstart as tstart, n_samples,
-                               not_tracking_samples, obc_bad_status_samples
-                               from trak_stats_data
-                               where type != 'FID' and color is not null and
-                               kalman_tstart >= %f and kalman_tstart < %f"""
-                     % (trend_start, trend_stop))
-times = (stars['tstart'] - trend_start) / csec_year
+if 'stars' not in globals():
+    stars = dbh.fetchall("""select obsid, slot, type, color, kalman_datestart, kalman_tstart as tstart, n_samples,
+    not_tracking_samples, obc_bad_status_samples
+    from trak_stats_data
+    where type != 'FID' and color is not null and
+    kalman_tstart >= %f and kalman_tstart < %f
+    order by kalman_tstart """
+                         % (trend_start, trend_stop))
+times = DateTime(stars['tstart']).frac_year - DateTime(trend_start).frac_year
 
 
 figmap = { 'bad_trak' : 1,
@@ -44,7 +48,7 @@ figmap = { 'bad_trak' : 1,
 
 
 # masks of the stars matching the thresholds we've set (5% and 100% hardcoded)
-masks = dict(bad_trak=( stars['not_tracking_samples']*1.0/stars['n_samples']
+failures = dict(bad_trak=( stars['not_tracking_samples']*1.0/stars['n_samples']
                         >= .05 ),
              obc_bad=( stars['obc_bad_status_samples']*1.0/stars['n_samples']
                        >= .05 ),
@@ -52,55 +56,71 @@ masks = dict(bad_trak=( stars['not_tracking_samples']*1.0/stars['n_samples']
 
 
 
-# a log likelihood sum to be used as the user statistic
-def llh(data, model, staterror=None,syserror=None,weight=None):
-    prob = p(times, data, model)
-    return (np.sum(-np.log(prob)), np.ones_like(times))
-
 # the probability per acquisition based on the given probability
 # line... return the probability as a vector of the same length
 # as the boolean acquisition and the times
-def p( times, fail_mask, model):
+def fail_prob(fail_mask, model):
     # I tried ones_like here, but didn't have an easy dtype option...
-    prob = np.ones(len(times),dtype=np.float64)
+    prob = np.ones(len(fail_mask),dtype=np.float64)
     fail_prob = model
     success_prob = prob - fail_prob
     prob[fail_mask == False] = success_prob[fail_mask == False] 
     prob[fail_mask] = fail_prob[fail_mask]
+    if (np.any( prob <= 0) or np.any( prob > 1)):
+        raise ValueError
     return prob
+
+# a log likelihood sum to be used as the user statistic
+def llh(data, model, staterror=None,syserror=None,weight=None):
+    prob = fail_prob(data, model)
+    return (np.sum(-np.log(prob)), np.ones_like(data))
+
+
 
 # I've got nothing for error ...
 def my_err(data):
-    return np.ones_like(data)
+    return np.ones_like(data)*.25
 
+def lim_line(pars, x):
+    line = pars[0] * x + pars[1]
+    line[line <= 0] = 1e-7
+    line[line >= 1] = 1 - 1e-7
+    return line
 
-for ftype in masks.keys():
+#axplot = {}
+#ftype = 'obc_bad'
+for ftype in failures:
 
-    fail_mask = masks[ftype]
+    fail_mask = failures[ftype]
     data_id = figmap[ftype]
     ui.set_method('simplex')
-    ui.polynom1d.ypoly
-    ui.set_model(data_id, 'ypoly')
-    ui.thaw(ypoly.c0)
-    ui.thaw(ypoly.c1)
-    ypoly.c0.val = 0.02
-    ypoly.c1.min = 0
-    ypoly.c1.max = (1 - ypoly.c0.val) / (times[-1] - times[0])
 
-    times[-1] - times[0]
+    ui.load_user_model(lim_line, '%s_mod' % ftype)
+    ui.add_user_pars('%s_mod' % ftype, ['m', 'b'])
+    ui.set_model(data_id, '%s_mod' % ftype)
+
     ui.load_arrays(data_id,
                    times,
-                   masks[ftype])
-    #ui.set_staterror(data_id,
-    #                 np.max([rates[d]['fail']['err_h'][time_ok],
-    #                         rates[d]['fail']['err_l'][time_ok]], axis=0))
+                   failures[ftype])
+
+    fmod = ui.get_model_component('%s_mod' % ftype)
+
+    fmod.b.min = 0
+    fmod.b.max = 1
+    fmod.m.min = 0
+    fmod.m.max = 0.5
+    fmod.b.val=1e-7
+
 
     ui.load_user_stat("loglike", llh, my_err)
     ui.set_stat(loglike)
+    # the tricky part here is that the "model" is the probability polynomial
+    # we've defined evaluated at the data x values.
+    # the model and the data are passed to the user stat/ llh
+    # function as it is minimized.
     ui.fit(data_id)
     myfit = ui.get_fit_results()
-    axplot = ui.get_model_plot(data_id)
-
+    #axplot[ftype] = ui.get_model_plot(data_id)
     if myfit.succeeded:
         import pickle
         pickle.dump(myfit, open('%s_fitfile.pkl' % ftype, 'w'))
@@ -111,8 +131,8 @@ for ftype in masks.keys():
                                        datestart=trend_date_start,
                                        data=ftype,
                                        bin='unbinned_likelihood',
-                                       m=ypoly.c1.val,
-                                       b=ypoly.c0.val,
+                                       m=fmod.m.val,
+                                       b=fmod.b.val,
                                        comment="mx+b with b at time0 and m = (delta rate)/year"),
                                       sort_keys=True,
                                   indent=4))
@@ -120,4 +140,35 @@ for ftype in masks.keys():
     else:
         raise ValueError("Not fit")
 
-    ui.clean()
+# make some plots
+# just grab the stars in equal-n chunks
+
+def chunks(l, n):
+    return [l[i:i+n] for i in range(0, len(l), n)]
+
+star_chunks = chunks(stars, 1000)
+s_dates = []
+s_bad_trak = []
+s_obc_bad = []
+s_no_trak = []
+for s in star_chunks:
+    # masks of the stars matching the thresholds we've set (5% and 100% hardcoded)
+    chunk_fails = dict(bad_trak=( s['not_tracking_samples']*1.0/s['n_samples']
+                              >= .05 ),
+                   obc_bad=( s['obc_bad_status_samples']*1.0/s['n_samples']
+                             >= .05 ),
+                   no_trak=( s['not_tracking_samples'] == s['n_samples']))
+    s_dates.append(DateTime(np.mean(s['tstart'])).frac_year)
+    s_bad_trak.append(np.count_nonzero(chunk_fails['bad_trak'])/len(s))
+    s_obc_bad.append(np.count_nonzero(chunk_fails['obc_bad'])/len(s))
+    s_no_trak.append(np.count_nonzero(chunk_fails['no_trak'])/len(s))
+
+
+s_dates = np.array(s_dates)
+s_rates = { 'bad_trak' : np.array(s_bad_trak),
+            'obc_bad' : np.array(s_obc_bad),
+            'no_trak' : np.array(s_no_trak) }
+
+
+
+#    ui.clean()
