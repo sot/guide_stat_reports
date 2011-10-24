@@ -1,0 +1,37 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+  <head>
+    <title>Guide Stats Summaries</title>
+    <link href="/mta/ASPECT/aspect.css" rel="stylesheet" type="text/css" media="all" />
+  </head>
+
+  <body>
+<!--#include virtual="/mta/ASPECT/header.html"-->
+
+<H1>Summary of Guide Star Statistics</H1>
+
+<P>For the plots below, a line for each failure type has been fit
+using a likelihood function over the range of available data and this
+fit has been plotted over these binned data.</P>
+
+
+
+
+{% for f in ['bad_trak', 'no_trak', 'obc_bad'] %}
+<H1>{{f}}</H1>
+<TABLE>
+<TR><TH>No Error bars</TH><TH>Error bars<TH></TR>
+{% for t in ['month', 'quarter', 'semi', 'year'] %}
+<TR><TD><IMG SRC="summary_{{ t }}_{{ f }}.png"></TD>
+<TD><IMG SRC="summary_{{ t }}_{{ f }}_eb.png"></TD></TR>
+{% endfor %}
+</TABLE>
+{% endfor %}
+    
+<!--#include virtual="/mta/ASPECT/footer.html"--> 
+<!--footer end-->
+
+  </body>
+</html>
+
+

@@ -10,9 +10,9 @@ FLIGHT_ENV = SKA
 
 include /proj/sot/ska/include/Makefile.FLIGHT
 
-SHARE = gui_stat_reports.py make_toc.pl
-TEMPLATES = templates/index.html templates/stars.html
-DATA = task_schedule.cfg
+SHARE = gui_stat_reports.py make_toc.pl gui_summarize.py star_error.py
+TEMPLATES = templates/index.html templates/stars.html templates/summary.html
+DATA = task_schedule.cfg make_likelihood_fit.py 
 
 install:
 ifdef TEMPLATES

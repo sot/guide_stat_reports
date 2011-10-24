@@ -1,30 +1,12 @@
 #!/usr/bin/env python
 
-# Acquisition Statistics Report generation
-
 from __future__ import division
 import os
 import sys
 import numpy as np
-#import logging
-#import json
-
-# Matplotlib setup
-# Use Agg backend for command-line (non-interactive) operation
-#import matplotlib
-#if __name__ == '__main__':
-#    matplotlib.use('Agg')
-#    import matplotlib.pyplot as plt
-
-#from Ska.Matplotlib import plot_cxctime
-
 from Chandra.Time import DateTime
-
-#import sherpa.ui as ui
 from Ska.report_ranges import timerange, get_next, in_range
-import scipy.stats
 import Ska.DBI
-
 
 
 task = 'gui_stat_reports'
@@ -35,7 +17,7 @@ from star_error import high_low_rate
 
 
 trend_type = 'month'
-trend_date_start = '2006:292:00:00:00.000'
+trend_date_start = '2008:001:00:00:00.000'
 trend_stop = DateTime().secs 
 trend_mxd = DateTime(trend_date_start).mxDateTime
 trend_start_unit = in_range(trend_type, trend_mxd)
@@ -78,12 +60,6 @@ for ftype in masks:
 
     dtable = open("bymonth_data_%s.txt" % ftype, 'w' )
     dtable.write("time,rate,err,n_stars,n_fail,err_hi,err_low\n")
-#    print "time,rate,err,n_stars,n_fail,err_hi,err_low"
-
-    #rates = dict(time=[],
-    #             rate=[],
-    #             err_h=[],
-    #             err_l=[])
 
     curr_unit = trend_start_unit
     while (curr_unit != now_unit ):
@@ -103,13 +79,6 @@ for ftype in masks:
         dtable.write("%.2f,%.6f,%.6f,%d,%d,%.4f,%.4f\n" % (
             mid_frac, fail_rate, np.max([err_high, err_low]),
             n_stars, n_failed, err_high, err_low)) 
-#        print "%.2f,%.6f,%.6f,%d,%d,%.4f,%.4f" % (
-#            mid_frac, fail_rate, np.max([err_high, err_low]),
-#            n_stars, n_failed, err_high, err_low)
-        #rates['time'].append(mid_frac)
-        #rates['rate'].append(fail_rate)
-        #rates['err_h'].append(err_high)
-        #rates['err_l'].append(err_low)
 
         next_range = get_next(timerange(curr_unit))
         curr_unit = in_range(trend_type, next_range['start'])
