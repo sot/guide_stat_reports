@@ -140,34 +140,34 @@ for ftype in failures:
     else:
         raise ValueError("Not fit")
 
-# make some plots
-# just grab the stars in equal-n chunks
-
-def chunks(l, n):
-    return [l[i:i+n] for i in range(0, len(l), n)]
-
-star_chunks = chunks(stars, 1000)
-s_dates = []
-s_bad_trak = []
-s_obc_bad = []
-s_no_trak = []
-for s in star_chunks:
-    # masks of the stars matching the thresholds we've set (5% and 100% hardcoded)
-    chunk_fails = dict(bad_trak=( s['not_tracking_samples']*1.0/s['n_samples']
-                              >= .05 ),
-                   obc_bad=( s['obc_bad_status_samples']*1.0/s['n_samples']
-                             >= .05 ),
-                   no_trak=( s['not_tracking_samples'] == s['n_samples']))
-    s_dates.append(DateTime(np.mean(s['tstart'])).frac_year)
-    s_bad_trak.append(np.count_nonzero(chunk_fails['bad_trak'])/len(s))
-    s_obc_bad.append(np.count_nonzero(chunk_fails['obc_bad'])/len(s))
-    s_no_trak.append(np.count_nonzero(chunk_fails['no_trak'])/len(s))
-
-
-s_dates = np.array(s_dates)
-s_rates = { 'bad_trak' : np.array(s_bad_trak),
-            'obc_bad' : np.array(s_obc_bad),
-            'no_trak' : np.array(s_no_trak) }
+## make some plots
+## just grab the stars in equal-n chunks
+#
+#def chunks(l, n):
+#    return [l[i:i+n] for i in range(0, len(l), n)]
+#
+#star_chunks = chunks(stars, 1000)
+#s_dates = []
+#s_bad_trak = []
+#s_obc_bad = []
+#s_no_trak = []
+#for s in star_chunks:
+#    # masks of the stars matching the thresholds we've set (5% and 100% hardcoded)
+#    chunk_fails = dict(bad_trak=( s['not_tracking_samples']*1.0/s['n_samples']
+#                              >= .05 ),
+#                   obc_bad=( s['obc_bad_status_samples']*1.0/s['n_samples']
+#                             >= .05 ),
+#                   no_trak=( s['not_tracking_samples'] == s['n_samples']))
+#    s_dates.append(DateTime(np.mean(s['tstart'])).frac_year)
+#    s_bad_trak.append(np.count_nonzero(chunk_fails['bad_trak'])/len(s))
+#    s_obc_bad.append(np.count_nonzero(chunk_fails['obc_bad'])/len(s))
+#    s_no_trak.append(np.count_nonzero(chunk_fails['no_trak'])/len(s))
+#
+#
+#s_dates = np.array(s_dates)
+#s_rates = { 'bad_trak' : np.array(s_bad_trak),
+#            'obc_bad' : np.array(s_obc_bad),
+#            'no_trak' : np.array(s_no_trak) }
 
 
 
