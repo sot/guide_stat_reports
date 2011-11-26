@@ -25,6 +25,7 @@ from star_error import high_low_rate
 
 task = 'gui_stat_reports'
 TASK_SHARE = os.path.join(os.environ['SKA'],'share', task)
+TASK_DATA = os.path.join(os.environ['SKA'], 'data', task)
 #TASK_SHARE = "."
 
 jinja_env = jinja2.Environment(
@@ -383,9 +384,9 @@ def main(opt):
 
 
             import json
-            pred = dict(obc_bad=json.load(open('obc_bad_fitfile.json')),
-                        bad_trak=json.load(open('bad_trak_fitfile.json')),
-                        no_trak=json.load(open('no_trak_fitfile.json')),
+            pred = dict(obc_bad=json.load(open(os.path.join(TASK_DATA, 'obc_bad_fitfile.json'))),
+                        bad_trak=json.load(open(os.path.join(TASK_DATA, 'bad_trak_fitfile.json'))),
+                        no_trak=json.load(open(os.path.join(TASK_DATA, 'no_trak_fitfile.json'))),
                         )  
 
             old_pred = dict(obc_bad=0.07,
@@ -397,11 +398,13 @@ def main(opt):
             half_frac_year = half_mxd.year + half_mxd.day_of_year / 365.25
             predictions = {}
             for ftype in pred:
-                if half_frac_year >= pred[ftype]['time0']:
+                if half_frac_year >= DateTime(pred[ftype]['datestart']).frac_year:
                     predictions[ftype + '_rate'] = (
-                        pred[ftype]['m'] * (half_frac_year - pred[ftype]['time0']) + pred[ftype]['b'])
+                        pred[ftype]['m'] * (half_frac_year - DateTime(pred[ftype]['datestart']).frac_year)
+                        + pred[ftype]['b'])
                 else:
                     predictions[ftype + '_rate'] = old_pred[ftype]
+
             
             rep = star_info(stars, predictions, opt.bad_thresh, opt.obc_bad_thresh,
                             tname, mxdatestart, mxdatestop, webout)
