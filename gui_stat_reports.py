@@ -258,9 +258,8 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
         trep['rate_pred'] = predictions['%s_rate' % ftype]
         trep['p_less'] = scipy.stats.poisson.cdf(
 		    trep['n_stars'], trep['n_stars_pred'])
-        trep['p_more'] = scipy.stats.poisson.cdf(
-            trep['n_stars'] - 1, trep['n_stars_pred'])
-
+        trep['p_more'] = 1 - scipy.stats.poisson.cdf(
+                trep['n_stars'] - 1, trep['n_stars_pred'])
 
         flat_fails = [dict(id=star['id'],
                            obsid=star['obsid'],
