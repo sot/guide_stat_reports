@@ -18,6 +18,8 @@ use CGI qw{ :standard -no_undef_params};
 
 #use Data::Dumper;
 
+my $mica_url = 'https://icxc.cfa.harvard.edu/aspect/mica_reports';
+
 my $app = new CGI;
 
 # if there are any parameters
@@ -99,6 +101,13 @@ sub star_table{
 		$table .= sprintf( "<TD>%6.3f</TD>", $value );
 		next;
 	    }
+	    if ($field eq 'obsid'){
+                my $chunk = substr(sprintf("%05d", $value), 0, 2);
+                my $mica_page = sprintf("${mica_url}/${chunk}/%05d", $value);
+		$table .= sprintf("<TD><A HREF=\"$mica_page\">$value</A></</TD>");
+		next;
+	    }
+
 	    $table .= qq{ <TD>$value</TD> };
 	}
 	$table .= qq{ </TR> \n };
