@@ -16,8 +16,6 @@ if __name__ == '__main__':
         matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-
-import mx.DateTime
 from Chandra.Time import DateTime
 
 
@@ -60,11 +58,11 @@ for d in data.keys():
         rep_text = rep_file.read()
         rep = json.loads(rep_text)
         for ftype in rates.keys():
-            mxd = DateTime( (DateTime(rep['datestart']).secs
-                             +  DateTime(rep['datestop']).secs) / 2).mxDateTime
-            frac_year = mxd.day_of_year * 1.0 / 365
+            datetime = DateTime((DateTime(rep['datestart']).secs
+                                 + DateTime(rep['datestop']).secs) / 2)
+            frac_year = datetime.frac_year
             rates[ftype]['time'] = np.append(rates[ftype]['time'],
-                                                mxd.year + frac_year) 
+                                             frac_year)
             for fblock in rep['fail_types']:
                 if fblock['type'] == ftype:
                     rates[ftype]['rate'] = np.append(rates[ftype]['rate'],

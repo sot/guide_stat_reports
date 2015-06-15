@@ -215,15 +215,15 @@ class NoStarError(Exception):
 
 
 def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
-	       tname, mxdatestart, mxdatestop, outdir):
+	       tname, range_datestart, range_datestop, outdir):
 		
     """
     Generate a report dictionary for the time range.
 
     :param acqs: recarray of all acquisition stars available in the table
     :param tname: timerange string (e.g. 2010-M05)
-    :param mxdatestart: mx.DateTime of start of reporting interval
-    :param mxdatestop: mxDateTime of end of reporting interval
+    :param range_datestart: Chandra.Time DateTime of start of reporting interval
+    :param range_datestop: Chandra.Time DateTime of end of reporting interval
     :param pred_start: date for beginning of time range for predictions based
     on average from pred_start to now()
 
@@ -231,11 +231,17 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
     """
 	
     rep = { 'datestring' : tname,
-            'datestart' : DateTime(mxdatestart).date,
-            'datestop' : DateTime(mxdatestop).date,
-            'human_date_start' : mxdatestart.strftime("%d-%B-%Y"),
-            'human_date_stop' : mxdatestop.strftime("%d-%B-%Y"),
-	    }
+            'datestart' : DateTime(range_datestart).date,
+            'datestop' : DateTime(range_datestop).date,
+            'human_date_start' : "{}-{}-{}".format(
+                    range_datestart.caldate[0:4],
+                    range_datestart.caldate[4:7],
+                    range_datestart.caldate[7:9]),
+            'human_date_stop' : "{}-{}-{}".format(
+                    range_datestop.caldate[0:4],
+                    range_datestop.caldate[4:7],
+                    range_datestop.caldate[7:9])
+            }
 
     rep['n_stars'] = len(stars)
     rep['fail_types'] = []
@@ -368,8 +374,8 @@ def main(opt):
 	if not os.path.exists(dataout):
 		os.makedirs(dataout)
 
-	mxdatestart = to_update[tname]['start']
-	mxdatestop = to_update[tname]['stop']
+	range_datestart = to_update[tname]['start']
+	range_datestop = to_update[tname]['stop']
 
         try:
 
@@ -380,8 +386,8 @@ def main(opt):
             and color is not NULL
             """
                                     % (data_table,
-                                       DateTime(mxdatestart).secs,
-                                       DateTime(mxdatestop).secs))
+                                       DateTime(range_datestart).secs,
+                                       DateTime(range_datestop).secs))
 
 
 
@@ -397,8 +403,8 @@ def main(opt):
                             no_trak=0.001)
 
 
-            half_mxd = mxdatestart + ((mxdatestop-mxdatestart)/2)
-            half_frac_year = half_mxd.year + half_mxd.day_of_year / 365.25
+            half_date = range_datestart + (range_datestop - range_datestart) / 2
+            half_frac_year = half_date.frac_year
             predictions = {}
             for ftype in pred:
                 if half_frac_year >= DateTime(pred[ftype]['datestart']).frac_year:
@@ -410,7 +416,7 @@ def main(opt):
 
             
             rep = star_info(stars, predictions, opt.bad_thresh, opt.obc_bad_thresh,
-                            tname, mxdatestart, mxdatestop, webout)
+                            tname, range_datestart, range_datestop, webout)
 
             import json
             rep_file = open(os.path.join(dataout, 'rep.json'), 'w')
@@ -432,8 +438,8 @@ def main(opt):
                        )
             make_gui_plots( stars,
                         opt.bad_thresh,
-                        tstart=DateTime(mxdatestart).secs,
-                        tstop=DateTime(mxdatestop).secs,
+                        tstart=DateTime(range_datestart).secs,
+                        tstop=DateTime(range_datestop).secs,
                         outdir=webout)
             make_html(nav, rep, predictions, outdir=webout)
         except NoStarError:
