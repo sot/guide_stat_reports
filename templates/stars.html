@@ -12,7 +12,11 @@ trak</TH><TH>obc bad status</TH></TR>
 <TD ALIGN="right">
 <A HREF="{{ nav.starcheck_cgi }}{{ star.obsid }}">{{ star.obsid }}</A></TD>
 <TD ALIGN="right">{{ "%.2f"|format(star.mag) }}</TD>
+{% if star.mag_obs is none %}
+<TD ALIGN="right"></TD>
+{% else %}
 <TD ALIGN="right">{{ "%.2f"|format(star.mag_obs) }}</TD>
+{% endif %}
 <TD ALIGN="right">{{ "%.2f"|format(star.color)}}</TD>
 <TD ALIGN="right">{{ "%.3f"|format(star.bad_track) }}</TD>
 <TD ALIGN="right">{{ "%.3f"|format(star.obc_bad_status) }}</TD>
