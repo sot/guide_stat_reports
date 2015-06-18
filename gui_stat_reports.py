@@ -374,8 +374,8 @@ def main(opt):
 	if not os.path.exists(dataout):
 		os.makedirs(dataout)
 
-	range_datestart = to_update[tname]['start']
-	range_datestop = to_update[tname]['stop']
+	range_datestart = DateTime(to_update[tname]['start'])
+	range_datestop = DateTime(to_update[tname]['stop'])
 
         try:
 
@@ -438,8 +438,8 @@ def main(opt):
                        )
             make_gui_plots( stars,
                         opt.bad_thresh,
-                        tstart=DateTime(range_datestart).secs,
-                        tstop=DateTime(range_datestop).secs,
+                        tstart=range_datestart.secs,
+                        tstop=range_datestop.secs,
                         outdir=webout)
             make_html(nav, rep, predictions, outdir=webout)
         except NoStarError:
