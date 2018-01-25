@@ -137,7 +137,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     # Delta Mag vs Mag
     h=plt.figure(figsize=figsize)
     tracked = range_guis[range_guis['f_track'] > 0]
-    plt.plot(tracked['mag_aca'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
+    plt.plot(tracked['mag_aca'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.', markersize=2)
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Mag')
@@ -148,7 +148,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Delta Mag vs Color
     h=plt.figure(figsize=figsize)
-    plt.plot(tracked['color'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
+    plt.plot(tracked['color'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.', markersize=2)
     plt.xlabel('Color (B-V)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Color')
