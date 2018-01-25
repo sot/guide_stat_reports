@@ -142,6 +142,8 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Mag')
     plt.grid(True)
+    plt.ylim(np.min([-4, np.min(tracked['aoacmag_mean'] - tracked['mag_aca'])]),
+             np.max([4, np.max(tracked['aoacmag_mean'] - tracked['mag_aca'])]))
     plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_mag.png'))
     plt.close(h)
@@ -153,6 +155,8 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Color')
     plt.grid(True)
+    plt.ylim(np.min([-4, np.min(tracked['aoacmag_mean'] - tracked['mag_aca'])]),
+             np.max([4, np.max(tracked['aoacmag_mean'] - tracked['mag_aca'])]))
     plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_color.png'))
     plt.close(h)
