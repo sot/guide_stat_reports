@@ -161,12 +161,19 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_color.png'))
     plt.close(h)
 
+    or_obs = range_guis['obsid'] < 38000
+    er_obs = ~or_obs
+
     # Fraction not tracking vs Mag
     h=plt.figure(figsize=figsize)
-    plt.semilogy(range_guis['mag_aca'], 1.0 - range_guis['f_track'], 'k.')
+    plt.semilogy(range_guis['mag_aca'][or_obs], 1.0 - range_guis['f_track'][or_obs], 'b.', alpha=.5,
+                 markersize=4, label='or')
+    plt.semilogy(range_guis['mag_aca'][er_obs], 1.0 - range_guis['f_track'][er_obs], 'r.', alpha=.5,
+                 markersize=4, label='er')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Fraction Not Tracking')
     plt.title('Fraction Not tracking vs Mag')
+    plt.legend(loc='upper left', fontsize='x-small', numpoints=1, labelspacing=.1, handletextpad=.1)
     plt.grid(True)
     plt.ylim(1e-5, 5)
     plt.tight_layout()
@@ -175,9 +182,13 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Fraction bad status vs Mag
     h=plt.figure(figsize=figsize)
-    plt.semilogy(range_guis['mag_aca'], range_guis['f_obc_bad'], 'k.')
+    plt.semilogy(range_guis['mag_aca'][or_obs], range_guis['f_obc_bad'][or_obs], 'b.', alpha=.5,
+                 markersize=4, label='or')
+    plt.semilogy(range_guis['mag_aca'][er_obs], range_guis['f_obc_bad'][er_obs], 'r.', alpha=.5,
+                 markersize=4, label='er')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Frac obc bad stat')
+    plt.legend(loc='upper left', fontsize='x-small', numpoints=1, labelspacing=.1, handletextpad=.1)
     plt.title('Frac obc bad stat vs mag')
     plt.grid(True)
     plt.ylim(1e-5, 5)
