@@ -17,7 +17,7 @@ if __name__ == '__main__':
 import jinja2
 import scipy.stats
 
-import Ska.DBI
+import mica.stats.guide_stats
 from Chandra.Time import DateTime
 import Ska.Matplotlib
 import Ska.report_ranges
@@ -95,14 +95,14 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     # Scaled Failure Histogram, full mag range
     h=plt.figure(figsize=figsize)
     mag_bin = .1
-    good = range_guis[range_guis['not_tracking_samples']*1.0/(range_guis['n_samples']) <= bad_thresh]
+    good = range_guis[(1.0 - range_guis['f_track']) <= bad_thresh]
     # use unfilled histograms from a scipy example
-    (bins, data) = Ska.Matplotlib.hist_outline(good['mag_exp'],
+    (bins, data) = Ska.Matplotlib.hist_outline(good['mag_aca'],
 					       bins=np.arange(5.5-(mag_bin/2),
 							      12+(mag_bin/2),mag_bin))
     plt.semilogy(bins, data+tiny_y, 'k-')
-    bad = range_guis[range_guis['not_tracking_samples']*1.0/(range_guis['n_samples']) > bad_thresh]
-    (bins, data) = Ska.Matplotlib.hist_outline(bad['mag_exp'],
+    bad = range_guis[(1.0 - range_guis['f_track']) > bad_thresh]
+    (bins, data) = Ska.Matplotlib.hist_outline(bad['mag_aca'],
 					       bins=np.arange(5.5-(mag_bin/2),
 							      12+(mag_bin/2),mag_bin))
     plt.semilogy(bins, 100*data+tiny_y, 'r-')
@@ -122,7 +122,6 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 					       bins=np.arange(-0.5-(color_bin/2),
 							      2+(color_bin/2),color_bin))
     plt.semilogy(bins, data+tiny_y, 'k-')
-    bad = range_guis[range_guis['not_tracking_samples']*1.0/(range_guis['n_samples']) > bad_thresh]
     (bins, data) = Ska.Matplotlib.hist_outline(bad['color'],
 					       bins=np.arange(-0.5-(color_bin/2),
 							      2+(color_bin/2),color_bin))
@@ -137,10 +136,8 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Delta Mag vs Mag
     h=plt.figure(figsize=figsize)
-    tracked = range_guis[range_guis['not_tracking_samples']
-			 < range_guis['n_samples']]
-    plt.plot(tracked['mag_exp'], tracked['aoacmag_mean']
-	     -tracked['mag_exp'], 'k.')
+    tracked = range_guis[range_guis['f_track'] > 0]
+    plt.plot(tracked['mag_aca'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Mag')
@@ -151,8 +148,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Delta Mag vs Color
     h=plt.figure(figsize=figsize)
-    plt.plot(tracked['color'], tracked['aoacmag_mean']
-    	     -tracked['mag_exp'], 'k.')
+    plt.plot(tracked['color'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
     plt.xlabel('Color (B-V)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Color')
@@ -163,9 +159,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Fraction not tracking vs Mag
     h=plt.figure(figsize=figsize)
-    trak_frac = (range_guis['not_tracking_samples']*1.0/
-		 range_guis['n_samples'])
-    plt.semilogy(range_guis['mag_exp'], trak_frac, 'k.')
+    plt.semilogy(range_guis['mag_aca'], 1.0 - range_guis['f_track'], 'k.')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Fraction Not Tracking')
     plt.title('Fraction Not tracking vs Mag')
@@ -177,10 +171,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
 
     # Fraction not tracking plus bad status vs Mag
     h=plt.figure(figsize=figsize)
-    trak_frac = ((range_guis['not_tracking_samples']
-		  + range_guis['obc_bad_status_samples'])*1.0
-		 / range_guis['n_samples'])
-    plt.semilogy(range_guis['mag_exp'], trak_frac, 'k.')
+    plt.semilogy(range_guis['mag_aca'], (1.0 - range_guis['f_track']) + range_guis['f_obc_bad'], 'k.')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Frac notrak or obc bad stat')
     plt.title('Frac notrak or obc bad stat vs mag')
@@ -249,12 +240,9 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
         raise NoStarError("No acq stars in range")
 
 
-    fail_stars = dict(bad_trak = stars[stars['not_tracking_samples']*1.0/stars['n_samples']
-                                       > bad_thresh ],
-                      obc_bad = stars[stars['obc_bad_status_samples']*1.0/stars['n_samples']
-                                      > obc_bad_thresh ],
-                      no_trak = stars[stars['not_tracking_samples'] == stars['n_samples']
-        ])
+    fail_stars = dict(bad_trak = stars[(1.0 - stars['f_track']) > bad_thresh],
+                      obc_bad = stars[stars['f_obc_bad'] > obc_bad_thresh],
+                      no_trak = stars[stars['f_track'] == 0])
 
     fail_types = ['bad_trak', 'no_trak', 'obc_bad']
     for ftype in fail_types:
@@ -271,14 +259,12 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
         trep['p_more'] = 1 - scipy.stats.poisson.cdf(
                 trep['n_stars'] - 1, trep['n_stars_pred'])
 
-        flat_fails = [dict(id=star['id'],
+        flat_fails = [dict(id=star['agasc_id'],
                            obsid=star['obsid'],
-                           mag=star['mag_exp'],
+                           mag=star['mag_aca'],
                            mag_obs=star['aoacmag_mean'],
-                           bad_track=(star['not_tracking_samples']*1.0
-                                      /star['n_samples']),
-                           obc_bad_status=(star['obc_bad_status_samples']*1.0
-                                           /star['n_samples']),
+                           bad_track=(1.0 - star['f_track']),
+                           obc_bad_status=star['f_obc_bad'],
                            color=star['color'])
                       for star in fail_stars[ftype]]
         outfile = os.path.join(outdir, "%s_stars_list.html" % ftype)
@@ -291,23 +277,21 @@ def star_info(stars, predictions, bad_thresh, obc_bad_thresh,
     # data structure
     bin = .1
     for tmag_start in np.arange(10.0,10.8,.1):
-        mag_range_stars = stars[ (stars['mag_exp'] >= tmag_start)
-                                 & (stars['mag_exp'] < (tmag_start + bin))]
+        mag_range_stars = stars[ (stars['mag_aca'] >= tmag_start)
+                                 & (stars['mag_aca'] < (tmag_start + bin))]
         mag_rep=dict(mag_start=tmag_start,
                      mag_stop=(tmag_start + bin),
                      n_stars=len(mag_range_stars))
         for ftype in fail_types:
             mag_range_fails = fail_stars[ftype][
-                (fail_stars[ftype]['mag_exp'] >= tmag_start)
-                & (fail_stars[ftype]['mag_exp'] < (tmag_start + bin))]
-            flat_fails = [ dict(id=star['id'],
+                (fail_stars[ftype]['mag_aca'] >= tmag_start)
+                & (fail_stars[ftype]['mag_aca'] < (tmag_start + bin))]
+            flat_fails = [ dict(id=star['agasc_id'],
                                 obsid=star['obsid'],
-                                mag=star['mag_exp'],
+                                mag=star['mag_aca'],
                                 mag_obs=star['aoacmag_mean'],
-                                bad_track=(star['not_tracking_samples']*1.0
-                                           /star['n_samples']),
-                                obc_bad_status=(star['obc_bad_status_samples']*1.0
-                                                    /star['n_samples']),
+                                bad_track=(1.0 - star['f_track']),
+                                obc_bad_status=star['f_obc_bad'],
 				color=star['color'])
 			   for star in mag_range_fails]
             failed_star_file = "%s_%.1f_stars_list.html" % (ftype, tmag_start)
@@ -342,17 +326,9 @@ def main(opt):
     Update star statistics plots.  Mission averages are computed with all stars
     from 2003:001 to the end of the interval.
     """
-    
-    sqlaca = Ska.DBI.DBI(dbi='sybase', server='sybase', user='aca_read', database='aca', numpy=True)
+
     min_time = DateTime('2003:001:00:00:00.000')
 
-    data_table = 'trak_stats_data'
-
-
-    # use the acq_stats_id_by_obsid view for a quick count of the number of ID/NOID
-    # stars in each obsid.  Used by make_id_plots()
-    #all_id = sqlaca.fetchall('select * from acq_stats_id_by_obsid where tstart >= %f' % 
-    #                         min_acq_time.secs )
 
     to_update = Ska.report_ranges.get_update_ranges(opt.days_back)
 
@@ -378,20 +354,9 @@ def main(opt):
 	range_datestop = DateTime(to_update[tname]['stop'])
 
         try:
-
-            stars = sqlaca.fetchall("""select * from %s
-            where kalman_tstart >= %f
-            and kalman_tstart < %f
-            and type != 'FID'
-            and color is not NULL
-            """
-                                    % (data_table,
-                                       DateTime(range_datestart).secs,
-                                       DateTime(range_datestop).secs))
-
-
-
-
+            stars = mica.stats.guide_stats.get_stats() 
+            stars = stars[(stars['kalman_tstart'] >= DateTime(range_datestart).secs)
+                          & (stars['kalman_tstart'] < DateTime(range_datestop).secs)]
             import json
             pred = dict(obc_bad=json.load(open(os.path.join(TASK_DATA, 'obc_bad_fitfile.json'))),
                         bad_trak=json.load(open(os.path.join(TASK_DATA, 'bad_trak_fitfile.json'))),
