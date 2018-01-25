@@ -110,7 +110,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('N stars (red is x100)')
     plt.xlim(5,12)
     plt.title('N good (black) and bad (red) stars vs Mag')
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'mag_histogram.png'))
     plt.close(h)
 
@@ -130,7 +130,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('N stars (red is x100)')
     plt.xlim(-0.5,2)
     plt.title('N good (black) and bad (red) stars vs Color')
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'color_histogram.png'))
     plt.close(h)
 
@@ -142,7 +142,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Mag')
     plt.grid(True)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_mag.png'))
     plt.close(h)
 
@@ -153,7 +153,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Color')
     plt.grid(True)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_color.png'))
     plt.close(h)
 
@@ -165,7 +165,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('Fraction Not tracking vs Mag')
     plt.grid(True)
     plt.ylim(1e-5, 1.1)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'frac_not_track_vs_mag.png'))
     plt.close(h)
 
@@ -177,7 +177,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.title('Frac notrak or obc bad stat vs mag')
     plt.grid(True)
     plt.ylim(1e-5, 1.1)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'frac_not_track_plus_status.png'))
     plt.close(h)
 
