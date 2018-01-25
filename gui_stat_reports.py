@@ -169,16 +169,16 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.savefig(os.path.join(outdir, 'frac_not_track_vs_mag.png'))
     plt.close(h)
 
-    # Fraction not tracking plus bad status vs Mag
+    # Fraction bad status vs Mag
     h=plt.figure(figsize=figsize)
-    plt.semilogy(range_guis['mag_aca'], (1.0 - range_guis['f_track']) + range_guis['f_obc_bad'], 'k.')
+    plt.semilogy(range_guis['mag_aca'], range_guis['f_obc_bad'], 'k.')
     plt.xlabel('AGASC magnitude (mag)')
-    plt.ylabel('Frac notrak or obc bad stat')
-    plt.title('Frac notrak or obc bad stat vs mag')
+    plt.ylabel('Frac obc bad stat')
+    plt.title('Frac obc bad stat vs mag')
     plt.grid(True)
     plt.ylim(1e-5, 1.1)
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, 'frac_not_track_plus_status.png'))
+    plt.savefig(os.path.join(outdir, 'frac_bad_obc_status.png'))
     plt.close(h)
 
 
