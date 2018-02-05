@@ -110,7 +110,7 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('N stars (red is x100)')
     plt.xlim(5,12)
     plt.title('N good (black) and bad (red) stars vs Mag')
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'mag_histogram.png'))
     plt.close(h)
 
@@ -130,55 +130,70 @@ def make_gui_plots( guis, bad_thresh, tstart=0, tstop=DateTime().secs, outdir="p
     plt.ylabel('N stars (red is x100)')
     plt.xlim(-0.5,2)
     plt.title('N good (black) and bad (red) stars vs Color')
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'color_histogram.png'))
     plt.close(h)
 
     # Delta Mag vs Mag
     h=plt.figure(figsize=figsize)
     tracked = range_guis[range_guis['f_track'] > 0]
-    plt.plot(tracked['mag_aca'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
+    plt.plot(tracked['mag_aca'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.', markersize=2)
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Mag')
     plt.grid(True)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.ylim(np.min([-4, np.min(tracked['aoacmag_mean'] - tracked['mag_aca'])]),
+             np.max([4, np.max(tracked['aoacmag_mean'] - tracked['mag_aca'])]))
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_mag.png'))
     plt.close(h)
 
     # Delta Mag vs Color
     h=plt.figure(figsize=figsize)
-    plt.plot(tracked['color'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.')
+    plt.plot(tracked['color'], tracked['aoacmag_mean'] - tracked['mag_aca'], 'k.', markersize=2)
     plt.xlabel('Color (B-V)')
     plt.ylabel('Observed - AGASC mag')
     plt.title('Delta Mag vs Color')
     plt.grid(True)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.ylim(np.min([-4, np.min(tracked['aoacmag_mean'] - tracked['mag_aca'])]),
+             np.max([4, np.max(tracked['aoacmag_mean'] - tracked['mag_aca'])]))
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'delta_mag_vs_color.png'))
     plt.close(h)
 
+    or_obs = range_guis['obsid'] < 38000
+    er_obs = ~or_obs
+
     # Fraction not tracking vs Mag
     h=plt.figure(figsize=figsize)
-    plt.semilogy(range_guis['mag_aca'], 1.0 - range_guis['f_track'], 'k.')
+    plt.semilogy(range_guis['mag_aca'][or_obs], 1.0 - range_guis['f_track'][or_obs], 'b.', alpha=.5,
+                 markersize=4, label='OR')
+    plt.semilogy(range_guis['mag_aca'][er_obs], 1.0 - range_guis['f_track'][er_obs], 'r.', alpha=.5,
+                 markersize=4, label='ER')
     plt.xlabel('AGASC magnitude (mag)')
     plt.ylabel('Fraction Not Tracking')
     plt.title('Fraction Not tracking vs Mag')
+    plt.legend(loc='upper left', fontsize='x-small', numpoints=1, labelspacing=.1, handletextpad=.1)
     plt.grid(True)
-    plt.ylim(1e-5, 1.1)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
+    plt.ylim(1e-5, 5)
+    plt.tight_layout()
     plt.savefig(os.path.join(outdir, 'frac_not_track_vs_mag.png'))
     plt.close(h)
 
-    # Fraction not tracking plus bad status vs Mag
+    # Fraction bad status vs Mag
     h=plt.figure(figsize=figsize)
-    plt.semilogy(range_guis['mag_aca'], (1.0 - range_guis['f_track']) + range_guis['f_obc_bad'], 'k.')
+    plt.semilogy(range_guis['mag_aca'][or_obs], range_guis['f_obc_bad'][or_obs], 'b.', alpha=.5,
+                 markersize=4, label='OR')
+    plt.semilogy(range_guis['mag_aca'][er_obs], range_guis['f_obc_bad'][er_obs], 'r.', alpha=.5,
+                 markersize=4, label='ER')
     plt.xlabel('AGASC magnitude (mag)')
-    plt.ylabel('Frac notrak or obc bad stat')
-    plt.title('Frac notrak or obc bad stat vs mag')
+    plt.ylabel('Frac obc bad stat')
+    plt.legend(loc='upper left', fontsize='x-small', numpoints=1, labelspacing=.1, handletextpad=.1)
+    plt.title('Frac obc bad stat vs mag')
     plt.grid(True)
-    plt.ylim(1e-5, 1.1)
-    plt.subplots_adjust(top=.85, bottom=.17, right=.97)
-    plt.savefig(os.path.join(outdir, 'frac_not_track_plus_status.png'))
+    plt.ylim(1e-5, 5)
+    plt.tight_layout()
+    plt.savefig(os.path.join(outdir, 'frac_bad_obc_status.png'))
     plt.close(h)
 
 
