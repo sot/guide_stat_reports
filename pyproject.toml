@@ -1,0 +1,21 @@
+[project]
+name = "guide_stat_reports"
+dynamic = ["version"]
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["guide_stat_reports"]  # package names should match these glob patterns (["*"] by default)
+
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[project.urls]
+Homepage = "https://github.com/sot/guide_stat_reports"
+
+[project.scripts]
+guide-stat-reports = "guide_stat_reports.gui_stat_reports:main"
+# guide-stat-reports-toc = "guide_stat_reports.toc:main"
+guide-stat-reports-summary = "guide_stat_reports.gui_summarize:main"
