@@ -1,9 +1,12 @@
 #!/usr/bin/env python
+"""
+Generate acquisition statistics report.
+"""
 
-# Acquisition Statistics Report generation
-
-import logging
+import argparse
+import json
 import os
+from pathlib import Path
 
 import jinja2
 import matplotlib
@@ -17,52 +20,57 @@ if __name__ == "__main__":
 
 import matplotlib.pyplot as plt
 import mica.stats.guide_stats
-import Ska.Matplotlib
-import Ska.report_ranges
-from Chandra.Time import DateTime
-from star_error import high_low_rate
+import ska_matplotlib
+import ska_report_ranges
+from chandra_aca.star_probs import binomial_confidence_interval
+from chandra_time import DateTime
+from ska_helpers import logging
 
-task = "gui_stat_reports"
-TASK_SHARE = os.path.join(os.environ["SKA"], "share", task)
-TASK_DATA = os.path.join(os.environ["SKA"], "data", task)
-# TASK_SHARE = "."
+SKA = Path(os.environ["SKA"])
+
 
 jinja_env = jinja2.Environment(
-    loader=jinja2.FileSystemLoader(os.path.join(TASK_SHARE, "templates"))
+    loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates" / "guide_stats")
 )
 
-logger = logging.getLogger(task)
-logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(message)s")
+logger = logging.basic_logger("acq_stat_reports", level="INFO")
 
 
-def get_options():
-    from optparse import OptionParser
-
-    parser = OptionParser()
+def get_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.set_defaults()
-    parser.add_option(
+    parser.add_argument(
         "--webdir",
         default="/proj/sot/ska/www/ASPECT/gui_stat_reports",
         help="Output web directory",
+        type=Path,
     )
-    parser.add_option(
+    parser.add_argument(
         "--datadir",
         default="/proj/sot/ska/data/gui_stat_reports",
         help="Output data directory",
+        type=Path,
     )
-    parser.add_option("--url", default="/mta/ASPECT/gui_stat_reports/")
-    parser.add_option(
-        "--verbose",
-        type="int",
-        default=1,
-        help="Verbosity (0=quiet, 1=normal, 2=debug)",
+    parser.add_argument(
+        "--input-datadir",
+        default=SKA / "data" / "gui_stat_reports",
+        type=Path,
+        help="Input data directory",
     )
-    parser.add_option("--bad_thresh", type="float", default=0.05)
-    parser.add_option("--obc_bad_thresh", type="float", default=0.05)
-    (parser.add_option("--days_back", default=30, type="int"),)
-    opt, args = parser.parse_args()
-    return opt, args
+    parser.add_argument("--url", default="/mta/ASPECT/gui_stat_reports/")
+    parser.add_argument("--bad_thresh", type=float, default=0.05)
+    parser.add_argument("--obc_bad_thresh", type=float, default=0.05)
+    parser.add_argument("--days_back", default=30, type=int)
+
+    verbosity_choices = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    verbosity_choices += [v.lower() for v in verbosity_choices]
+    parser.add_argument(
+        "-v",
+        default="INFO",
+        choices=verbosity_choices,
+        help="Verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+    )
+    return parser
 
 
 def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # noqa: PLR0915
@@ -86,8 +94,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     if tstop is None:
         tstop = DateTime().secs
 
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
+    outdir.mkdir(exist_ok=True, parents=True)
 
     figsize = (5, 2.5)
     tiny_y = 0.1
@@ -100,13 +107,13 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     mag_bin = 0.1
     good = range_guis[(1.0 - range_guis["f_track"]) <= bad_thresh]
     # use unfilled histograms from a scipy example
-    (bins, data) = Ska.Matplotlib.hist_outline(
+    (bins, data) = ska_matplotlib.hist_outline(
         good["mag_aca"],
         bins=np.arange(5.5 - (mag_bin / 2), 12 + (mag_bin / 2), mag_bin),
     )
     plt.semilogy(bins, data + tiny_y, "k-")
     bad = range_guis[(1.0 - range_guis["f_track"]) > bad_thresh]
-    (bins, data) = Ska.Matplotlib.hist_outline(
+    (bins, data) = ska_matplotlib.hist_outline(
         bad["mag_aca"], bins=np.arange(5.5 - (mag_bin / 2), 12 + (mag_bin / 2), mag_bin)
     )
     plt.semilogy(bins, 100 * data + tiny_y, "r-")
@@ -115,19 +122,19 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     plt.xlim(5, 12)
     plt.title("N good (black) and bad (red) stars vs Mag")
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "mag_histogram.png"))
+    plt.savefig(outdir / "mag_histogram.png")
     plt.close(h)
 
     # Scaled Failure Histogram vs Color
     h = plt.figure(figsize=figsize)
     color_bin = 0.1
     # use unfilled histograms from a scipy example
-    (bins, data) = Ska.Matplotlib.hist_outline(
+    (bins, data) = ska_matplotlib.hist_outline(
         good["color"],
         bins=np.arange(-0.5 - (color_bin / 2), 2 + (color_bin / 2), color_bin),
     )
     plt.semilogy(bins, data + tiny_y, "k-")
-    (bins, data) = Ska.Matplotlib.hist_outline(
+    (bins, data) = ska_matplotlib.hist_outline(
         bad["color"],
         bins=np.arange(-0.5 - (color_bin / 2), 2 + (color_bin / 2), color_bin),
     )
@@ -137,7 +144,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     plt.xlim(-0.5, 2)
     plt.title("N good (black) and bad (red) stars vs Color")
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "color_histogram.png"))
+    plt.savefig(outdir / "color_histogram.png")
     plt.close(h)
 
     # Delta Mag vs Mag
@@ -158,7 +165,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
         np.max([4, np.max(tracked["aoacmag_mean"] - tracked["mag_aca"])]),
     )
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "delta_mag_vs_mag.png"))
+    plt.savefig(outdir / "delta_mag_vs_mag.png")
     plt.close(h)
 
     # Delta Mag vs Color
@@ -178,7 +185,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
         np.max([4, np.max(tracked["aoacmag_mean"] - tracked["mag_aca"])]),
     )
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "delta_mag_vs_color.png"))
+    plt.savefig(outdir / "delta_mag_vs_color.png")
     plt.close(h)
 
     or_obs = range_guis["obsid"] < 38000
@@ -215,7 +222,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     plt.grid(True)
     plt.ylim(1e-5, 5)
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "frac_not_track_vs_mag.png"))
+    plt.savefig(outdir / "frac_not_track_vs_mag.png")
     plt.close(h)
 
     # Fraction bad status vs Mag
@@ -249,7 +256,7 @@ def make_gui_plots(guis, bad_thresh, tstart=0, tstop=None, outdir="plots"):  # n
     plt.grid(True)
     plt.ylim(1e-5, 5)
     plt.tight_layout()
-    plt.savefig(os.path.join(outdir, "frac_bad_obc_status.png"))
+    plt.savefig(outdir / "frac_bad_obc_status.png")
     plt.close(h)
 
 
@@ -268,9 +275,8 @@ def make_html(nav_dict, rep_dict, pred_dict, outdir):
     page = template.render(
         nav=nav_dict, rep=rep_dict, by_mag=rep_dict["by_mag"], pred=pred_dict
     )
-    f = open(os.path.join(outdir, "index.html"), "w")
-    f.write(page)
-    f.close()
+    with open(outdir / "index.html", "w") as fh:
+        fh.write(page)
 
 
 class NoStarError(Exception):
@@ -294,8 +300,8 @@ def star_info(
 
     :param acqs: recarray of all acquisition stars available in the table
     :param tname: timerange string (e.g. 2010-M05)
-    :param range_datestart: Chandra.Time DateTime of start of reporting interval
-    :param range_datestop: Chandra.Time DateTime of end of reporting interval
+    :param range_datestart: chandra_time DateTime of start of reporting interval
+    :param range_datestop: chandra_time DateTime of end of reporting interval
     :param pred_start: date for beginning of time range for predictions based
     on average from pred_start to now()
 
@@ -331,16 +337,16 @@ def star_info(
 
     fail_types = ["bad_trak", "no_trak", "obc_bad"]
     for ftype in fail_types:
+        n_stars = len(fail_stars[ftype])
+        r, low, high = binomial_confidence_interval(n_stars, rep["n_stars"])
         trep = {}
         trep["type"] = ftype
-        trep["n_stars"] = len(fail_stars[ftype])
-        trep["rate"] = len(fail_stars[ftype]) * 1.0 / rep["n_stars"]
-        trep["rate_err_high"], trep["rate_err_low"] = high_low_rate(
-            trep["n_stars"], rep["n_stars"]
-        )
+        trep["n_stars"] = n_stars
+        trep["rate"] = float(r)
+        trep["rate_err_high"], trep["rate_err_low"] = high - r, r - low
 
-        trep["n_stars_pred"] = predictions["%s_rate" % ftype] * rep["n_stars"]
-        trep["rate_pred"] = predictions["%s_rate" % ftype]
+        trep["n_stars_pred"] = predictions[f"{ftype}_rate"] * rep["n_stars"]
+        trep["rate_pred"] = predictions[f"{ftype}_rate"]
         trep["p_less"] = scipy.stats.poisson.cdf(trep["n_stars"], trep["n_stars_pred"])
         trep["p_more"] = 1 - scipy.stats.poisson.cdf(
             trep["n_stars"] - 1, trep["n_stars_pred"]
@@ -359,8 +365,8 @@ def star_info(
             for star in fail_stars[ftype]
         ]
 
-        outfile = os.path.join(outdir, "%s_stars_list.html" % ftype)
-        trep["fail_url"] = "%s_stars_list.html" % ftype
+        outfile = outdir / f"{ftype}_stars_list.html"
+        trep["fail_url"] = outfile.name
         rep["fail_types"].append(trep)
         make_fail_html(flat_fails, outfile)
 
@@ -394,14 +400,14 @@ def star_info(
                 }
                 for star in mag_range_fails
             ]
-            failed_star_file = "%s_%.1f_stars_list.html" % (ftype, tmag_start)
-            make_fail_html(flat_fails, os.path.join(outdir, failed_star_file))
-            mag_rep["%s_n_stars" % ftype] = len(mag_range_fails)
-            mag_rep["%s_fail_url" % ftype] = failed_star_file
+            failed_star_file = f"{ftype}_{tmag_start:.1f}_stars_list.html"
+            make_fail_html(flat_fails, outdir / failed_star_file)
+            mag_rep[f"{ftype}_n_stars"] = len(mag_range_fails)
+            mag_rep[f"{ftype}_fail_url"] = failed_star_file
             if len(mag_range_stars) == 0:
-                mag_rep["%s_rate" % ftype] = 0
+                mag_rep[f"{ftype}_rate"] = 0
             else:
-                mag_rep["%s_rate" % ftype] = (
+                mag_rep[f"{ftype}_rate"] = (
                     len(mag_range_fails) * 1.0 / len(mag_range_stars)
                 )
         rep["by_mag"].append(mag_rep)
@@ -424,31 +430,33 @@ def make_fail_html(fails, outfile):
     f.close()
 
 
-def main(opt):
+def main():
     """
     Update star statistics plots.
 
     Mission averages are computed with all stars from 2003:001 to the end of the interval.
     """
+    opt = get_parser().parse_args()
 
-    to_update = Ska.report_ranges.get_update_ranges(opt.days_back)
+    logger.setLevel(opt.v.upper())
+
+    to_update = ska_report_ranges.get_update_ranges(opt.days_back)
 
     for tname in sorted(to_update.keys()):
-        logger.debug("Attempting to update %s" % tname)
+        logger.debug(f"Attempting to update {tname}")
 
-        webout = os.path.join(
-            opt.webdir, "%s" % to_update[tname]["year"], to_update[tname]["subid"]
+        webout = (
+            opt.webdir / f"{to_update[tname]['year']}" / f"{to_update[tname]['subid']}"
         )
 
-        logger.debug("Writing reports to %s" % webout)
-        if not os.path.exists(webout):
-            os.makedirs(webout)
+        logger.debug(f"Writing reports to {webout}")
+        webout.mkdir(exist_ok=True, parents=True)
 
-        dataout = os.path.join(
-            opt.datadir, "%s" % to_update[tname]["year"], to_update[tname]["subid"]
+        logger.debug(f"Writing data to {webout}")
+        dataout = (
+            opt.datadir / f"{to_update[tname]['year']}" / f"{to_update[tname]['subid']}"
         )
-        if not os.path.exists(dataout):
-            os.makedirs(dataout)
+        dataout.mkdir(exist_ok=True, parents=True)
 
         range_datestart = DateTime(to_update[tname]["start"])
         range_datestop = DateTime(to_update[tname]["stop"])
@@ -459,18 +467,13 @@ def main(opt):
                 (stars["kalman_tstart"] >= DateTime(range_datestart).secs)
                 & (stars["kalman_tstart"] < DateTime(range_datestop).secs)
             ]
-            import json
 
             pred = {
-                "obc_bad": json.load(
-                    open(os.path.join(TASK_DATA, "obc_bad_fitfile.json"))
-                ),
+                "obc_bad": json.load(open(opt.input_datadir / "obc_bad_fitfile.json")),
                 "bad_trak": json.load(
-                    open(os.path.join(TASK_DATA, "bad_trak_fitfile.json"))
+                    open(opt.input_datadir / "bad_trak_fitfile.json")
                 ),
-                "no_trak": json.load(
-                    open(os.path.join(TASK_DATA, "no_trak_fitfile.json"))
-                ),
+                "no_trak": json.load(open(opt.input_datadir / "no_trak_fitfile.json")),
             }
 
             old_pred = {"obc_bad": 0.07, "bad_trak": 0.005, "no_trak": 0.001}
@@ -502,20 +505,16 @@ def main(opt):
                 webout,
             )
 
-            import json
-
-            rep_file = open(os.path.join(dataout, "rep.json"), "w")
+            rep_file = open(dataout / "rep.json", "w")
             rep_file.write(json.dumps(rep, sort_keys=True, indent=4))
             rep_file.close()
 
-            prev_range = Ska.report_ranges.get_prev(to_update[tname])
-            next_range = Ska.report_ranges.get_next(to_update[tname])
+            prev_range = ska_report_ranges.get_prev(to_update[tname])
+            next_range = ska_report_ranges.get_next(to_update[tname])
             nav = {
                 "main": opt.url,
-                "next": "%s/%s/%s/%s"
-                % (opt.url, next_range["year"], next_range["subid"], "index.html"),
-                "prev": "%s/%s/%s/%s"
-                % (opt.url, prev_range["year"], prev_range["subid"], "index.html"),
+                "next": f"{opt.url}/{next_range['year']}/{next_range['subid']}/index.html",
+                "prev": f"{opt.url}/{prev_range['year']}/{prev_range['subid']}/index.html",
             }
             make_gui_plots(
                 stars,
@@ -526,18 +525,10 @@ def main(opt):
             )
             make_html(nav, rep, predictions, outdir=webout)
         except NoStarError:
-            print("ERROR: Unable to process %s" % tname)
-            os.rmdir(webout)
-            os.rmdir(dataout)
+            print(f"ERROR: Unable to process {tname}")
+            webout.rmdir()
+            dataout.rmdir()
 
 
 if __name__ == "__main__":
-    opt, args = get_options()
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.WARN)
-    if opt.verbose == 2:
-        ch.setLevel(logging.DEBUG)
-    if opt.verbose == 0:
-        ch.setLevel(logging.ERROR)
-    logger.addHandler(ch)
-    main(opt)
+    main()
