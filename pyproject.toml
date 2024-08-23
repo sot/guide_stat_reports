@@ -17,5 +17,5 @@ Homepage = "https://github.com/sot/guide_stat_reports"
 
 [project.scripts]
 guide-stat-reports = "guide_stat_reports.gui_stat_reports:main"
-# guide-stat-reports-toc = "guide_stat_reports.toc:main"
+guide-stat-reports-toc = "guide_stat_reports.toc:main"
 guide-stat-reports-summary = "guide_stat_reports.gui_summarize:main"
