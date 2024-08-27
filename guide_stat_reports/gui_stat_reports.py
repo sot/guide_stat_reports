@@ -51,12 +51,6 @@ def get_parser():
         help="Output data directory",
         type=Path,
     )
-    parser.add_argument(
-        "--input-datadir",
-        default=SKA / "data" / "gui_stat_reports",
-        type=Path,
-        help="Input data directory",
-    )
     parser.add_argument("--url", default="/mta/ASPECT/gui_stat_reports/")
     parser.add_argument("--bad_thresh", type=float, default=0.05)
     parser.add_argument("--obc_bad_thresh", type=float, default=0.05)
@@ -469,11 +463,11 @@ def main():
             ]
 
             pred = {
-                "obc_bad": json.load(open(opt.input_datadir / "obc_bad_fitfile.json")),
+                "obc_bad": json.load(open(opt.datadir / "obc_bad_fitfile.json")),
                 "bad_trak": json.load(
-                    open(opt.input_datadir / "bad_trak_fitfile.json")
+                    open(opt.datadir / "bad_trak_fitfile.json")
                 ),
-                "no_trak": json.load(open(opt.input_datadir / "no_trak_fitfile.json")),
+                "no_trak": json.load(open(opt.datadir / "no_trak_fitfile.json")),
             }
 
             old_pred = {"obc_bad": 0.07, "bad_trak": 0.005, "no_trak": 0.001}
