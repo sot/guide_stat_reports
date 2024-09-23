@@ -83,7 +83,7 @@
 </TR>
 {% for m in by_mag %}
 <TR>
-<TD>{{ m.mag_start }} - {{ m.mag_stop }}</TD>
+<TD>{{ "%.1f"|format(m.mag_start) }} - {{ "%.1f"|format(m.mag_stop) }}</TD>
 <TD>{{ m.n_stars }}</TD>
 
 {% if m.bad_trak_n_stars > 0 %}
