@@ -3,13 +3,9 @@ Create the table of contents for the guide stat reports.
 """
 
 import argparse
-import os
 from pathlib import Path
 
 import jinja2
-
-WEBDATA = Path(os.environ["SKA"]) / "www" / "ASPECT" / "guide_stat_reports"
-
 
 JINJA_ENV = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates" / "guide_stats")
@@ -81,11 +77,7 @@ def get_cells(year, interval):
         return [{"year": year, "start": start, "span": span}]
 
 
-def get_toc(data_dir=None):
-    if data_dir is None:
-        data_dir = WEBDATA
-
-    # these are all the expected intervals
+def get_toc(data_dir):
     all_years = [int(p.name) for p in sorted(data_dir.glob("????"))]
     all_semi = [f"S{semi:01d}" for semi in range(1, 3)]
     all_quarters = [f"Q{quarter:01d}" for quarter in range(1, 5)]
@@ -142,7 +134,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--webdir",
-        default=Path(WEBDATA),
+        default="./webout",
         help="Output directory",
         type=Path,
     )

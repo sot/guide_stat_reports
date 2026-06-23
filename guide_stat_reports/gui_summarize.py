@@ -5,7 +5,6 @@ Write summary page for guide stats.
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import jinja2
@@ -20,9 +19,6 @@ if __name__ == "__main__":
 import matplotlib.pyplot as plt
 from chandra_time import DateTime
 
-SKA = Path(os.environ["SKA"])
-
-
 JINJA_ENV = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates" / "guide_stats")
 )
@@ -32,19 +28,19 @@ def get_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--webdir",
-        default=SKA / "www" / "ASPECT" / "gui_stat_reports",
+        default="./webout",
         help="Output web directory",
         type=Path,
     )
     parser.add_argument(
         "--datadir",
-        default=SKA / "data" / "gui_stat_reports",
+        default="./dataout",
         help="Output data directory",
         type=Path,
     )
     parser.add_argument(
         "--input-datadir",
-        default=SKA / "data" / "gui_stat_reports",
+        default="./dataout",
         type=Path,
         help="Input data directory",
     )

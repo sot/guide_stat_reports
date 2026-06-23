@@ -5,7 +5,6 @@ Generate acquisition statistics report.
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import jinja2
@@ -26,9 +25,6 @@ from chandra_aca.star_probs import binomial_confidence_interval
 from chandra_time import DateTime
 from ska_helpers import logging
 
-SKA = Path(os.environ["SKA"])
-
-
 jinja_env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates" / "guide_stats")
 )
@@ -41,13 +37,13 @@ def get_parser():
     parser.set_defaults()
     parser.add_argument(
         "--webdir",
-        default="/proj/sot/ska/www/ASPECT/gui_stat_reports",
+        default="./webout",
         help="Output web directory",
         type=Path,
     )
     parser.add_argument(
         "--datadir",
-        default="/proj/sot/ska/data/gui_stat_reports",
+        default="./dataout",
         help="Output data directory",
         type=Path,
     )
