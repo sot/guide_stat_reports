@@ -6,6 +6,9 @@ dependencies = []
 [tool.setuptools.packages.find]
 include = ["guide_stat_reports"]  # package names should match these glob patterns (["*"] by default)
 
+[tool.setuptools.package-data]
+guide_stat_reports = ["data/*.json"]
+
 [build-system]
 requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"

@@ -462,12 +462,11 @@ def main():
                 & (stars["kalman_tstart"] < DateTime(range_datestop).secs)
             ]
 
+            data_dir = Path(__file__).parent / "data"
             pred = {
-                "obc_bad": json.load(open(opt.datadir / "obc_bad_fitfile.json")),
-                "bad_trak": json.load(
-                    open(opt.datadir / "bad_trak_fitfile.json")
-                ),
-                "no_trak": json.load(open(opt.datadir / "no_trak_fitfile.json")),
+                "obc_bad": json.load(open(data_dir / "obc_bad_fitfile.json")),
+                "bad_trak": json.load(open(data_dir / "bad_trak_fitfile.json")),
+                "no_trak": json.load(open(data_dir / "no_trak_fitfile.json")),
             }
 
             old_pred = {"obc_bad": 0.07, "bad_trak": 0.005, "no_trak": 0.001}

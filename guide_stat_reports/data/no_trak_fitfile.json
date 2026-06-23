@@ -1,0 +1,10 @@
+{
+    "b": 0.0003160276183650834, 
+    "bin": "unbinned_likelihood", 
+    "comment": "mx+b with b at time0 and m = (delta rate)/year", 
+    "data": "no_trak", 
+    "datestart": "2008:001:00:00:00.000", 
+    "datestop": "2011:297:15:03:51.040", 
+    "m": 0.00015095238636297586, 
+    "time0": 315532865.184
+}
