@@ -57,15 +57,14 @@ def main():  # noqa: PLR0915
     time_pad = 0.05
 
     data = {
-        "month": datadir.glob("????/M??/rep.json"),
-        "quarter": datadir.glob("????/Q?/rep.json"),
-        "semi": datadir.glob("????/S?/rep.json"),
-        "year": datadir.glob("????/YEAR/rep.json"),
+        "month": sorted(datadir.glob("????/M??/rep.json")),
+        "quarter": sorted(datadir.glob("????/Q?/rep.json")),
+        "semi": sorted(datadir.glob("????/S?/rep.json")),
+        "year": sorted(datadir.glob("????/YEAR/rep.json")),
     }
 
     # figmap = {"bad_trak": 1, "obc_bad": 2, "no_trak": 3}
-    for d in data:
-        data[d] = sorted(data[d])
+    for d, d_paths in data.items():
         rates = {
             ftype: {
                 "time": np.array([]),
@@ -76,27 +75,27 @@ def main():  # noqa: PLR0915
             for ftype in ["bad_trak", "no_trak", "obc_bad"]
         }
 
-        for p in data[d]:
+        for p in d_paths:
             with open(p, "r") as rep_file:
                 rep_text = rep_file.read()
             rep = json.loads(rep_text)
-            for ftype in rates:
+            for ftype, ftype_rates in rates.items():
                 datetime = DateTime(
                     (DateTime(rep["datestart"]).secs + DateTime(rep["datestop"]).secs)
                     / 2
                 )
                 frac_year = datetime.frac_year
-                rates[ftype]["time"] = np.append(rates[ftype]["time"], frac_year)
+                ftype_rates["time"] = np.append(ftype_rates["time"], frac_year)
                 for fblock in rep["fail_types"]:
                     if fblock["type"] == ftype:
-                        rates[ftype]["rate"] = np.append(
-                            rates[ftype]["rate"], fblock["rate"]
+                        ftype_rates["rate"] = np.append(
+                            ftype_rates["rate"], fblock["rate"]
                         )
-                        rates[ftype]["err_h"] = np.append(
-                            rates[ftype]["err_h"], fblock["rate_err_high"]
+                        ftype_rates["err_h"] = np.append(
+                            ftype_rates["err_h"], fblock["rate_err_high"]
                         )
-                        rates[ftype]["err_l"] = np.append(
-                            rates[ftype]["err_l"], fblock["rate_err_low"]
+                        ftype_rates["err_l"] = np.append(
+                            ftype_rates["err_l"], fblock["rate_err_low"]
                         )
 
         for ftype in [
