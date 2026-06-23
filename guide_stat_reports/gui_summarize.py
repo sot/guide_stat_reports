@@ -38,12 +38,6 @@ def get_parser():
         help="Output data directory",
         type=Path,
     )
-    parser.add_argument(
-        "--input-datadir",
-        default="./dataout",
-        type=Path,
-        help="Input data directory",
-    )
     return parser
 
 
@@ -127,7 +121,8 @@ def main():  # noqa: PLR0915
                 markersize=5,
             )
             ax2.grid()
-            with open(args.input_datadir / f"{ftype}_fitfile.json", "r") as fit_file:
+            fit_data_dir = Path(__file__).parent / "data"
+            with open(fit_data_dir / f"{ftype}_fitfile.json", "r") as fit_file:
                 fit_text = fit_file.read()
             fit = json.loads(fit_text)
             trend_start_frac = DateTime(fit["datestart"]).frac_year
