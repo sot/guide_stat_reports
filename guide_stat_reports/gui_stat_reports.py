@@ -47,7 +47,6 @@ def get_parser():
         help="Output data directory",
         type=Path,
     )
-    parser.add_argument("--url", default="/mta/ASPECT/gui_stat_reports/")
     parser.add_argument("--bad_thresh", type=float, default=0.05)
     parser.add_argument("--obc_bad_thresh", type=float, default=0.05)
     parser.add_argument("--days_back", default=30, type=int)
@@ -501,9 +500,9 @@ def main():
             prev_range = ska_report_ranges.get_prev(to_update[tname])
             next_range = ska_report_ranges.get_next(to_update[tname])
             nav = {
-                "main": opt.url,
-                "next": f"{opt.url}/{next_range['year']}/{next_range['subid']}/index.html",
-                "prev": f"{opt.url}/{prev_range['year']}/{prev_range['subid']}/index.html",
+                "main": "../../index.html",
+                "next": f"../../{next_range['year']}/{next_range['subid']}/index.html",
+                "prev": f"../../{prev_range['year']}/{prev_range['subid']}/index.html",
             }
             make_gui_plots(
                 stars,
