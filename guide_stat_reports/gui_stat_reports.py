@@ -5,7 +5,6 @@ Generate acquisition statistics report.
 
 import argparse
 import json
-import os
 from pathlib import Path
 
 import jinja2
@@ -26,9 +25,6 @@ from chandra_aca.star_probs import binomial_confidence_interval
 from chandra_time import DateTime
 from ska_helpers import logging
 
-SKA = Path(os.environ["SKA"])
-
-
 jinja_env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(Path(__file__).parent / "templates" / "guide_stats")
 )
@@ -41,17 +37,16 @@ def get_parser():
     parser.set_defaults()
     parser.add_argument(
         "--webdir",
-        default="/proj/sot/ska/www/ASPECT/gui_stat_reports",
+        default="./webout",
         help="Output web directory",
         type=Path,
     )
     parser.add_argument(
         "--datadir",
-        default="/proj/sot/ska/data/gui_stat_reports",
+        default="./dataout",
         help="Output data directory",
         type=Path,
     )
-    parser.add_argument("--url", default="/mta/ASPECT/gui_stat_reports/")
     parser.add_argument("--bad_thresh", type=float, default=0.05)
     parser.add_argument("--obc_bad_thresh", type=float, default=0.05)
     parser.add_argument("--days_back", default=30, type=int)
@@ -462,12 +457,11 @@ def main():
                 & (stars["kalman_tstart"] < DateTime(range_datestop).secs)
             ]
 
+            data_dir = Path(__file__).parent / "data"
             pred = {
-                "obc_bad": json.load(open(opt.datadir / "obc_bad_fitfile.json")),
-                "bad_trak": json.load(
-                    open(opt.datadir / "bad_trak_fitfile.json")
-                ),
-                "no_trak": json.load(open(opt.datadir / "no_trak_fitfile.json")),
+                "obc_bad": json.load(open(data_dir / "obc_bad_fitfile.json")),
+                "bad_trak": json.load(open(data_dir / "bad_trak_fitfile.json")),
+                "no_trak": json.load(open(data_dir / "no_trak_fitfile.json")),
             }
 
             old_pred = {"obc_bad": 0.07, "bad_trak": 0.005, "no_trak": 0.001}
@@ -506,9 +500,9 @@ def main():
             prev_range = ska_report_ranges.get_prev(to_update[tname])
             next_range = ska_report_ranges.get_next(to_update[tname])
             nav = {
-                "main": opt.url,
-                "next": f"{opt.url}/{next_range['year']}/{next_range['subid']}/index.html",
-                "prev": f"{opt.url}/{prev_range['year']}/{prev_range['subid']}/index.html",
+                "main": "../../index.html",
+                "next": f"../../{next_range['year']}/{next_range['subid']}/index.html",
+                "prev": f"../../{prev_range['year']}/{prev_range['subid']}/index.html",
             }
             make_gui_plots(
                 stars,
